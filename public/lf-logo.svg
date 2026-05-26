@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <!-- Swirl stem — bold J/hook shape -->
+  <path d="M58 78 C58 85 52 90 44 90 C36 90 30 84 30 76 C30 68 36 62 44 62 L44 56 C32 56 22 65 22 76 C22 88 32 98 44 98 C56 98 66 88 66 76 L66 30" stroke="white" stroke-width="9" stroke-linecap="round" fill="none"/>
+  <!-- Leaf body -->
+  <path d="M66 30 C66 30 82 18 78 6 C68 8 56 18 56 32 C56 44 64 52 66 54 C68 52 76 44 76 32 C76 26 72 20 66 14" stroke="white" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <!-- Leaf fill -->
+  <path d="M66 14 C72 20 76 26 76 32 C76 44 68 52 66 54 C64 52 56 44 56 32 C56 18 68 8 78 6 C74 6 70 9 66 14 Z" fill="white" opacity="0.9"/>
+  <!-- Flame teardrop -->
+  <ellipse cx="78" cy="8" rx="5" ry="7" fill="white" transform="rotate(-20 78 8)"/>
+</svg>

@@ -1,0 +1,61 @@
+/* ===== FOUNDERS GROTESK — LeafFilter Brand Font ===== */
+
+@font-face {
+  font-family: 'Founders Grotesk';
+  src: url('/fonts/founders-grotesk-light.woff2') format('woff2');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Founders Grotesk';
+  src: url('/fonts/founders-grotesk-regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Map Medium (500) to Regular since we don't have a dedicated medium weight */
+@font-face {
+  font-family: 'Founders Grotesk';
+  src: url('/fonts/founders-grotesk-regular.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Founders Grotesk';
+  src: url('/fonts/founders-grotesk-semibold.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Map Bold (700) to Semibold since we don't have a dedicated bold weight */
+@font-face {
+  font-family: 'Founders Grotesk';
+  src: url('/fonts/founders-grotesk-semibold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Map Extrabold (800) to Semibold as well */
+@font-face {
+  font-family: 'Founders Grotesk';
+  src: url('/fonts/founders-grotesk-semibold.woff2') format('woff2');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Monospace variant for code/data displays */
+@font-face {
+  font-family: 'Founders Grotesk Mono';
+  src: url('/fonts/founders-grotesk-mono-regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
