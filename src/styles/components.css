@@ -326,7 +326,15 @@ input[type="range"]::-moz-range-thumb {
   background: linear-gradient(180deg, rgba(255,255,255,0.12) 0%, transparent 60%, rgba(0,0,0,0.15) 100%);
   pointer-events: none;
 }
-.scene-card-body { padding: 12px; }
+/* Direction indicator (read-only arrow next to animation name) */
+.dir-indicator {
+  color: var(--accent);
+  font-weight: var(--fw-bold);
+  font-size: 13px;
+  margin-left: 2px;
+}
+
+.scene-card-body { padding: 10px 12px 12px; }
 .scene-card-name {
   font-family: var(--font-display);
   font-size: var(--fs-small);
@@ -339,13 +347,104 @@ input[type="range"]::-moz-range-thumb {
   color: var(--text-secondary);
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 6px;
   letter-spacing: 0.2px;
+  margin-bottom: 6px;
 }
 .scene-card-actions {
   display: flex;
   gap: var(--space-sm);
   margin-top: var(--space-sm);
+}
+
+/* --- LED Dot Row ---
+   Gap of 4px + dot width 7px = 11px per dot.
+   10px side padding → (card ~170px - 20px) / 11 ≈ 13 per row.
+   flex-wrap lets long cycles spill to a second row naturally. */
+.led-dots-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.3);
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  min-height: 25px;
+}
+
+.led-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* --- Inline Direction Arrows --- */
+.dir-inline {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.dir-arrow {
+  width: 22px;
+  height: 18px;
+  border-radius: 5px;
+  background: var(--bg-quaternary);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-tertiary);
+  transition: all var(--duration) var(--ease);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dir-arrow.active {
+  background: var(--accent);
+  color: #000;
+  border-color: var(--accent);
+  box-shadow: 0 0 5px var(--accent-glow);
+}
+
+.dir-arrow:active:not(.active) {
+  background: var(--bg-tertiary);
+  transform: scale(0.9);
+}
+
+/* --- Scene Action Buttons (rectangular) --- */
+.scene-action-btn {
+  flex: 1;
+  padding: 9px 6px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-size: var(--fs-small);
+  font-weight: var(--fw-semibold);
+  text-align: center;
+  cursor: pointer;
+  transition: all var(--duration) var(--ease);
+  -webkit-tap-highlight-color: transparent;
+  letter-spacing: 0.1px;
+}
+
+.scene-action-btn:active { transform: scale(0.95); }
+
+.scene-action-btn.primary {
+  background: var(--accent);
+  color: #000;
+  border: 1px solid var(--accent);
+  box-shadow: 0 1px 10px var(--accent-glow);
+}
+
+.scene-action-btn.primary:hover { filter: brightness(1.08); }
+
+.scene-action-btn.secondary {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
 }
 
 /* --- Bottom Sheet --- */
@@ -409,6 +508,62 @@ input[type="range"]::-moz-range-thumb {
   font-size: 10px;
 }
 .toast.show { transform: translateX(-50%) translateY(0); }
+
+/* --- Pattern Category Icon Grid --- */
+.pattern-category-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px 12px;
+  padding: 4px 0 24px;
+}
+
+.pattern-category-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  animation: fadeInUp 0.35s var(--ease-out) both;
+}
+
+.pattern-category-circle {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  box-shadow: var(--shadow-card);
+  transition: transform var(--duration) var(--ease-spring), box-shadow var(--duration) var(--ease), background var(--duration) var(--ease);
+}
+
+.pattern-category-cell:active .pattern-category-circle {
+  transform: scale(0.88);
+  box-shadow: none;
+  background: var(--bg-tertiary);
+}
+
+.pattern-category-name {
+  font-size: 10px;
+  font-weight: var(--fw-bold);
+  text-align: center;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  line-height: 1.3;
+  max-width: 80px;
+}
+
+.pattern-category-count {
+  font-size: var(--fs-micro);
+  color: var(--accent);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.3px;
+}
 
 /* --- Category Tabs --- */
 .category-tabs {

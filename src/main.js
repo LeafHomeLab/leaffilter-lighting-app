@@ -10,6 +10,7 @@ import { renderZones } from './screens/zones.js';
 import { renderSupport } from './screens/support.js';
 import { renderControl } from './screens/control.js';
 import { renderOnboarding } from './screens/onboarding.js';
+import { renderPatternEditor } from './screens/patternEditor.js';
 
 // ===== APP STATE =====
 const state = {
@@ -39,6 +40,7 @@ const screens = {
   support: renderSupport,
   control: renderControl,
   onboarding: renderOnboarding,
+  patternEditor: renderPatternEditor,
 };
 
 function navigate(screen) {
@@ -55,7 +57,7 @@ function navigate(screen) {
 
   // Show/hide bottom nav (hide on onboarding)
   const nav = document.getElementById('bottom-nav');
-  if (nav) nav.style.display = screen === 'onboarding' ? 'none' : '';
+  if (nav) nav.style.display = (screen === 'onboarding' || screen === 'patternEditor') ? 'none' : '';
 }
 
 // ===== INIT =====

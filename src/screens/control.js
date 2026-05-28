@@ -6,6 +6,17 @@ export function renderControl(container, state, navigate) {
   if (baseScene) state.controlBaseScene = null;
 
   const recentColors = ['#FFA852','#FF1744','#4CAF50','#2196F3','#E91E63','#FF6D00','#AA00FF','#FFD600','#00BFA5','#FFFFFF','#FF6B6B','#4ECDC4'];
+
+  const colorPresets = [
+    { name: 'Sunset',   colors: ['#FF4500', '#FF8C00', '#FFD700'] },
+    { name: 'Ocean',    colors: ['#006994', '#00BFFF', '#40E0D0'] },
+    { name: 'Forest',   colors: ['#228B22', '#32CD32', '#90EE90'] },
+    { name: 'Candy',    colors: ['#FF1493', '#FF69B4', '#DA70D6'] },
+    { name: 'Arctic',   colors: ['#87CEEB', '#B0E0E6', '#E0F0FF'] },
+    { name: 'Fire',     colors: ['#CC0000', '#FF4500', '#FF8C00'] },
+    { name: 'Lavender', colors: ['#6A0DAD', '#9370DB', '#DA70D6'] },
+    { name: 'Mint',     colors: ['#00CED1', '#20B2AA', '#7FFFD4'] },
+  ];
   const whiteTemps = [
     { label: 'Candle', temp: 1800, color: '#FF9329' },
     { label: 'Warm', temp: 2700, color: '#FFB347' },
@@ -106,7 +117,7 @@ export function renderControl(container, state, navigate) {
             <button class="ctrl-tab ${drawerTab === 'recent' ? 'active' : ''}" data-tab="recent">Recent</button>
             <button class="ctrl-tab ${drawerTab === 'white' ? 'active' : ''}" data-tab="white">White</button>
             <button class="ctrl-tab ${drawerTab === 'preset' ? 'active' : ''}" data-tab="preset">Presets</button>
-            <button class="ctrl-tab ${drawerTab === 'rgb' ? 'active' : ''}" data-tab="rgb">RGB</button>
+            <button class="ctrl-tab ${drawerTab === 'rgb' ? 'active' : ''}" data-tab="rgb">Custom</button>
           </div>
           <div class="ctrl-drawer-content">
             ${drawerTab === 'recent' ? `
@@ -126,9 +137,14 @@ export function renderControl(container, state, navigate) {
               </div>
             ` : ''}
             ${drawerTab === 'preset' ? `
-              <div class="ctrl-preset-list">
-                ${[{name:'Chase',icon:'⚡'},{name:'Twinkle',icon:'✨'},{name:'Wave',icon:'🌊'},{name:'Fade',icon:'🌫️'},{name:'Meteor',icon:'☄️'},{name:'Pulse',icon:'💓'},{name:'Static',icon:'■'},{name:'Bounce',icon:'↕'}].map(p => `
-                  <button class="ctrl-preset-chip" data-preset="${p.name}">${p.icon} ${p.name}</button>
+              <div class="hm-palette-grid">
+                ${colorPresets.map((p, i) => `
+                  <button class="hm-palette-card" data-palette-idx="${i}">
+                    <div class="hm-palette-swatches">
+                      ${p.colors.map(c => `<div style="background:${c};"></div>`).join('')}
+                    </div>
+                    <div class="hm-palette-name">${p.name}</div>
+                  </button>
                 `).join('')}
               </div>
             ` : ''}
@@ -295,10 +311,11 @@ export function renderControl(container, state, navigate) {
       const newScene = {
         id: Date.now(),
         name,
-        category: 'Custom',
+        categoryId: 'your-patterns',
         colors: hexColors,
         speed,
         animation: speed === 0 ? 'Static' : 'Chase',
+        direction: 'forward',
         favorite: false,
       };
 
@@ -420,6 +437,23 @@ export function renderControl(container, state, navigate) {
         selectedHue = h;
         selectedSat = s;
         updateSelectorPosition();
+      });
+    });
+
+    container.querySelectorAll('.hm-palette-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const idx = parseInt(card.dataset.paletteIdx);
+        const { h, s } = hexToHsl(colorPresets[idx].colors[0]);
+        selectedHue = h;
+        selectedSat = s;
+        updateSelectorPosition();
+        const c = getColor();
+        const centerDot = container.querySelector('.color-wheel-center');
+        const glow = container.querySelector('.color-wheel-glow');
+        if (centerDot) { centerDot.style.background = c; centerDot.style.boxShadow = `0 0 20px ${c}88`; }
+        if (glow) glow.style.background = `radial-gradient(circle, ${c}44 0%, transparent 70%)`;
+        container.querySelectorAll('.hm-palette-card').forEach(c2 => c2.classList.remove('active'));
+        card.classList.add('active');
       });
     });
 
