@@ -35,3 +35,7 @@ Desktop.ini
 
 # Figma screenshots (design reference, not needed in prod)
 # figma-screenshots/
+
+# Capacitor native platforms (generated from web build)
+ios/
+android/
