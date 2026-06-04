@@ -138,6 +138,18 @@ Place Founders Grotesk `.woff2` files in `public/fonts/`:
 
 The BLE plugin (`@capacitor-community/bluetooth-le`) includes a web compatibility shim that loads successfully in browsers. This caused the onboarding to attempt a real Bluetooth scan instead of using demo mode, resulting in "Nothing Found." **Fix:** `src/ble.js` now checks `Capacitor.isNativePlatform()` and forces demo mode when running in a browser.
 
+### 🐛 Bugs to fix next
+
+> **Priority fixes before continuing with cloud/shell work.**
+
+1. **Patterns tab lands on "Your Patterns" instead of the main Patterns page.**
+   When tapping the "Patterns" icon in the bottom navigation bar, the app opens the Scenes screen but defaults to the "Your Patterns" category/tab. It should default to the main patterns view (showing all available patterns, not just user-created ones).
+   - Files to investigate: `src/screens/scenes.js` (likely the default category/filter state), `src/main.js` (the `scenesTargetCategory` state field defaults to `'your-patterns'`)
+
+2. **Pattern editor preview doesn't update until a second change is made.**
+   When creating a new pattern via the "+" button (pattern editor screen), the roofline LED preview at the top does not immediately reflect the current colors/animation. The user has to toggle another setting (e.g., direction, animation type) before the preview updates. The preview should auto-render as soon as the pattern editor opens and after every change.
+   - Files to investigate: `src/screens/patternEditor.js` (the preview render/update logic)
+
 ### What's needed next
 
 #### To continue Phase 3 (Cloud Backend) — agent can build:
