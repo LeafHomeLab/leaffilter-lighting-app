@@ -1,0 +1,11 @@
+ID,Phase,Component,Quantity,Unit Price ($),Total Cost ($),Purchase Link,Notes
+1,1 - Basic Desk Demo,QuinLED Dig-Quad V3 (Pre-Assembled),1,44.00,44.00,https://gilbertengineeringusa.com/products/quinled-dig-quad-diy-v3-pre-assembledquinled-dig-quad-diy-v3,"In-stock alternative US supplier. If out of stock, check: https://shop.allnetchina.cn/products/quinled-dig-quad-v3-digital-led-controller-new-improved-release or other antenna variants at DrZZs."
+2,1 - Basic Desk Demo,5V USB-C Power Block & Cable,1,0.00,0.00,N/A - Use standard phone charger,"Powers the Dig-Quad board independently from the 36V line."
+3,1 - Basic Desk Demo,Wago 221-413 Connectors (25-Pack),1,12.99,12.99,https://www.amazon.com/s?k=Wago+221-413,"Lever-nuts for splicing grounds of 36V PSU, Dig-Quad, and LEDs. (25-pack represents best value)."
+4,1 - Basic Desk Demo,Hookup Wire (22 AWG solid core kit),1,13.99,13.99,https://www.amazon.com/s?k=solid+core+hookup+wire+22awg,"For jumper connections from Wago to the controller screw terminals."
+5,1 - Basic Desk Demo,12V WS2811 LED Bullet String (50 nodes),1,19.99,19.99,https://www.amazon.com/s?k=BTF-LIGHTING+12V+WS2811+50+nodes,"Baseline diagnostic string (changed to 12V for standard availability and cost)."
+6,2 - Proprietary DIY,ESP32 NodeMCU Board (30-Pin - 3-Pack),1,12.99,12.99,https://www.amazon.com/s?k=ESP32+30-Pin+development+board,"Core processor chip to test proprietary hardware wiring. 3-pack for backups."
+7,2 - Proprietary DIY,74AHCT125 Level Shifter (DIP-14 - 10-Pack),1,7.49,7.49,https://www.amazon.com/s?k=SN74AHCT125N+DIP-14,"Converts ESP32 3.3V data signal to 5V to run pucks flicker-free."
+8,2 - Proprietary DIY,High-Voltage DC-DC Buck Converter (5-Pack),1,11.99,11.99,https://www.amazon.com/s?k=LM2596HVS+buck+converter,"Steps 36V down to 5V to power ESP32 directly from the 36V rail. Requires HVS (High Voltage) version."
+9,2 - Proprietary DIY,Breadboard & Dupont Jumper Wire Kit,1,8.99,8.99,https://www.amazon.com/s?k=breadboard+and+jumper+wire+kit,"For toolless connection of the DIY setup components."
+,,Total Estimated Cost (Phase 1 & 2),,,132.43,,Total cost includes both WLED testing and custom circuit prototype items.

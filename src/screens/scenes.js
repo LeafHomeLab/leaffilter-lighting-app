@@ -1,10 +1,11 @@
 import { scenes, patternCategories } from '../data/scenes.js';
 import { startRooflinePreview } from '../utils/rooflinePreview.js';
+import { showToast } from '../utils.js';
 
 export function renderScenes(container, state, navigate) {
   let view = 'categories';
   let activeCategoryId = null;
-  let stopPreviews = () => {};
+  let stopPreviews = () => { };
 
   // Support auto-opening a specific category (e.g. after saving from the editor)
   if (state.scenesTargetCategory) {
@@ -39,15 +40,15 @@ export function renderScenes(container, state, navigate) {
 
         <div class="pattern-category-grid stagger" id="category-grid">
           ${patternCategories.map(cat => {
-            const count = scenes.filter(s => s.categoryId === cat.id).length;
-            return `
+      const count = scenes.filter(s => s.categoryId === cat.id).length;
+      return `
               <div class="pattern-category-cell" data-cat-id="${cat.id}">
                 <div class="pattern-category-circle">${cat.icon}</div>
                 <span class="pattern-category-name">${cat.name}</span>
                 <span class="pattern-category-count">${count} Pattern${count !== 1 ? 's' : ''}</span>
               </div>
             `;
-          }).join('')}
+    }).join('')}
         </div>
 
         <div style="height: 24px;"></div>
@@ -102,17 +103,17 @@ export function renderScenes(container, state, navigate) {
 
         <div class="scenes-grid stagger" id="scenes-grid">
           ${filtered.map(scene => {
-            const dir = scene.direction ?? 'forward';
-            const isAnimated = scene.animation !== 'Static' && scene.speed > 0;
-            return `
+      const dir = scene.direction ?? 'forward';
+      const isAnimated = scene.animation !== 'Static' && scene.speed > 0;
+      return `
               <div class="scene-card" data-scene-id="${scene.id}">
                 <canvas class="pattern-preview-canvas" width="172" height="86"
                   style="width:100%; height:86px; display:block; border-radius:var(--radius-lg) var(--radius-lg) 0 0;"></canvas>
 
                 <div class="led-dots-row">
                   ${scene.colors.map(c =>
-                    `<div class="led-dot" style="background:${c}; box-shadow:0 0 5px ${c}80;"></div>`
-                  ).join('')}
+        `<div class="led-dot" style="background:${c}; box-shadow:0 0 5px ${c}80;"></div>`
+      ).join('')}
                 </div>
 
                 <div class="scene-card-body">
@@ -133,7 +134,7 @@ export function renderScenes(container, state, navigate) {
                 </div>
               </div>
             `;
-          }).join('')}
+    }).join('')}
         </div>
 
         ${filtered.length === 0 ? `
@@ -213,14 +214,3 @@ export function renderScenes(container, state, navigate) {
   render();
 }
 
-function showToast(message) {
-  let toast = document.querySelector('.toast');
-  if (!toast) {
-    toast = document.createElement('div');
-    toast.className = 'toast';
-    document.getElementById('app-frame').appendChild(toast);
-  }
-  toast.textContent = message;
-  toast.classList.add('show');
-  setTimeout(() => toast.classList.remove('show'), 2000);
-}

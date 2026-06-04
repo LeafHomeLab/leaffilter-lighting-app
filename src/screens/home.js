@@ -1,24 +1,27 @@
+import { hslToHex, hexToHsl, whiteTempToColor, showToast, syncFabColor, PATTERN_COLOR_LIGHTNESS } from '../utils.js';
+import { scenes } from '../data/scenes.js';
+
 export function renderHome(container, state, navigate) {
   const recentColors = [
-    '#FF1493','#FF69B4','#ADFF2F','#1E90FF','#DA70D6','#9B59B6','#FF4500','#2ECC71',
-    '#00FF7F','#F0F0F0','#FF8C00','#FFD700','#E74C3C','#8B00FF','#FF6347','#00BCD4'
+    '#FF1493', '#FF69B4', '#ADFF2F', '#1E90FF', '#DA70D6', '#9B59B6', '#FF4500', '#2ECC71',
+    '#00FF7F', '#F0F0F0', '#FF8C00', '#FFD700', '#E74C3C', '#8B00FF', '#FF6347', '#00BCD4'
   ];
   const whiteColors = [
-    '#FF9329','#FFB347','#FFD580','#FFF5E0','#FFFFF0','#F5F0FF',
-    '#FFAD5C','#FFCC80','#FFF8DC','#FFFAFA','#E8F0FF','#90B8FF'
+    '#FF9329', '#FFB347', '#FFD580', '#FFF5E0', '#FFFFF0', '#F5F0FF',
+    '#FFAD5C', '#FFCC80', '#FFF8DC', '#FFFAFA', '#E8F0FF', '#90B8FF'
   ];
 
   const movements = ['Stationary', 'Chase', 'Twinkle', 'Wave', 'Fade', 'Meteor', 'Pulse', 'Bounce'];
 
   const colorPresets = [
-    { name: 'Sunset',   colors: ['#FF4500', '#FF8C00', '#FFD700'] },
-    { name: 'Ocean',    colors: ['#006994', '#00BFFF', '#40E0D0'] },
-    { name: 'Forest',   colors: ['#228B22', '#32CD32', '#90EE90'] },
-    { name: 'Candy',    colors: ['#FF1493', '#FF69B4', '#DA70D6'] },
-    { name: 'Arctic',   colors: ['#87CEEB', '#B0E0E6', '#E0F0FF'] },
-    { name: 'Fire',     colors: ['#CC0000', '#FF4500', '#FF8C00'] },
-    { name: 'Lavender', colors: ['#6A0DAD', '#9370DB', '#DA70D6'] },
-    { name: 'Mint',     colors: ['#00CED1', '#20B2AA', '#7FFFD4'] },
+    { name: 'Sunset', colors: ['#FF4500', '#FFD700'] },
+    { name: 'Ocean', colors: ['#006994', '#40E0D0'] },
+    { name: 'Forest', colors: ['#228B22', '#90EE90'] },
+    { name: 'Candy', colors: ['#FF1493', '#DA70D6'] },
+    { name: 'Arctic', colors: ['#87CEEB', '#E0F0FF'] },
+    { name: 'Fire', colors: ['#CC0000', '#FF8C00'] },
+    { name: 'Lavender', colors: ['#6A0DAD', '#DA70D6'] },
+    { name: 'Mint', colors: ['#00CED1', '#7FFFD4'] },
   ];
 
   let selectedHue = 0;
@@ -27,7 +30,7 @@ export function renderHome(container, state, navigate) {
   let whiteTemp = 50;
   let activeTab = 'recent';
   let patternCount = 1;
-  let patternColors = ['#' + hslToHex(selectedHue, selectedSat, 55)];
+  let patternColors = ['#' + hslToHex(selectedHue, selectedSat, PATTERN_COLOR_LIGHTNESS)];
   let activeDotIdx = 0;
   let selectedMovement = state.selectedMovement ?? 'Stationary';
 
@@ -37,12 +40,12 @@ export function renderHome(container, state, navigate) {
   }
 
   function getColor() {
-    return `hsl(${selectedHue}, ${selectedSat}%, 55%)`;
+    return `hsl(${selectedHue}, ${selectedSat}%, ${PATTERN_COLOR_LIGHTNESS}%)`;
   }
 
   function updateActiveDotColor() {
     // Store the color at full brightness (L=55) as the source of truth
-    const fullHex = '#' + hslToHex(selectedHue, selectedSat, 55);
+    const fullHex = '#' + hslToHex(selectedHue, selectedSat, PATTERN_COLOR_LIGHTNESS);
     patternColors[activeDotIdx] = fullHex;
     refreshDotDisplays();
   }
@@ -60,36 +63,15 @@ export function renderHome(container, state, navigate) {
   }
 
   // Interpolate the white-temperature gradient to get a hex color
-  function whiteTempToColor(pct) {
-    const stops = [
-      [0,   0xFF, 0x93, 0x29],
-      [25,  0xFF, 0xD4, 0xA3],
-      [50,  0xFF, 0xFF, 0xFF],
-      [75,  0xC8, 0xD8, 0xFF],
-      [100, 0x7E, 0xB3, 0xFF],
-    ];
-    let lo = stops[0], hi = stops[stops.length - 1];
-    for (let i = 0; i < stops.length - 1; i++) {
-      if (pct >= stops[i][0] && pct <= stops[i + 1][0]) {
-        lo = stops[i]; hi = stops[i + 1]; break;
-      }
-    }
-    const t = (pct - lo[0]) / (hi[0] - lo[0] || 1);
-    const r = Math.round(lo[1] + t * (hi[1] - lo[1]));
-    const g = Math.round(lo[2] + t * (hi[2] - lo[2]));
-    const b = Math.round(lo[3] + t * (hi[3] - lo[3]));
-    return '#' + [r, g, b].map(c => c.toString(16).padStart(2, '0')).join('');
-  }
-
   function render() {
     const activeZoneNames = state.allZones.filter(z => z.active).map(z => z.name);
     const zoneLabel = activeZoneNames.length === 0 ? 'NONE'
       : activeZoneNames.length === 1 ? activeZoneNames[0].toUpperCase()
-      : `${activeZoneNames[0].toUpperCase()} +${activeZoneNames.length - 1}`;
-    const currentColor = getColor();
-
-    const showColorGrid = activeTab === 'recent' || activeTab === 'whites';
-    const tabColors = activeTab === 'whites' ? whiteColors : (state.recentColors ?? recentColors);
+        : `${activeZoneNames[0].toUpperCase()} +${activeZoneNames.length - 1}`;
+    const showColorGrid = activeTab === 'recent' || activeTab === 'whites' || activeTab === 'preset';
+    const tabColors = activeTab === 'whites' ? whiteColors
+      : activeTab === 'preset' ? colorPresets.flatMap(p => p.colors)
+        : (state.recentColors ?? recentColors);
 
     container.innerHTML = `
       <div class="screen hm-screen" id="screen-home">
@@ -105,7 +87,6 @@ export function renderHome(container, state, navigate) {
             </div>
           </div>
           <div class="hm-header-right">
-            <button class="hm-zone-btn" id="hm-zone-btn">SELECT ZONE(S)</button>
             <button class="hm-settings-btn" id="hm-settings-btn" aria-label="Settings">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
             </button>
@@ -120,8 +101,8 @@ export function renderHome(container, state, navigate) {
             <span class="hm-pattern-count">Repeat every ${patternCount} LED${patternCount > 1 ? 's' : ''}</span>
             <div class="hm-pattern-dots">
               ${patternColors.map((c, i) =>
-                `<div class="hm-pattern-dot${i === activeDotIdx ? ' active' : ''}" data-dot-idx="${i}" style="background:${c};box-shadow:0 0 8px ${c}88;"></div>`
-              ).join('')}
+      `<div class="hm-pattern-dot${i === activeDotIdx ? ' active' : ''}" data-dot-idx="${i}" style="background:${c};box-shadow:0 0 8px ${c}88;"></div>`
+    ).join('')}
             </div>
           </div>
           <div class="hm-pattern-btns">
@@ -187,18 +168,6 @@ export function renderHome(container, state, navigate) {
             ${tabColors.map(c => `<button class="hm-color-swatch" style="background:${c}" data-color="${c}"></button>`).join('')}
           </div>
         ` : ''}
-        ${activeTab === 'preset' ? `
-          <div class="hm-palette-grid">
-            ${colorPresets.map((p, i) => `
-              <button class="hm-palette-card" data-palette-idx="${i}">
-                <div class="hm-palette-swatches">
-                  ${p.colors.map(c => `<div style="background:${c};"></div>`).join('')}
-                </div>
-                <div class="hm-palette-name">${p.name}</div>
-              </button>
-            `).join('')}
-          </div>
-        ` : ''}
         ${activeTab === 'rgb' ? `
           <div class="hm-rgb-section">
             <div class="ctrl-rgb-row">
@@ -213,7 +182,7 @@ export function renderHome(container, state, navigate) {
             </div>
             <div class="ctrl-rgb-hex">
               <span class="ctrl-rgb-hex-label">#</span>
-              <input type="text" class="ctrl-rgb-hex-input" id="rgb-hex" value="${hslToHex(selectedHue, selectedSat, 55)}" maxlength="6" />
+              <input type="text" class="ctrl-rgb-hex-input" id="rgb-hex" value="${hslToHex(selectedHue, selectedSat, PATTERN_COLOR_LIGHTNESS)}" maxlength="6" />
             </div>
           </div>
         ` : ''}
@@ -230,7 +199,7 @@ export function renderHome(container, state, navigate) {
         </div>
         <div class="hm-action-row" style="margin-bottom: var(--space-md);">
           <button class="hm-action-fill" id="home-apply">SET PATTERN</button>
-          <button class="hm-action-fill hm-action-secondary" id="home-save">SAVE AS PATTERN</button>
+          <button class="hm-action-fill" id="home-save">SAVE AS PATTERN</button>
         </div>
 
       </div>
@@ -242,6 +211,8 @@ export function renderHome(container, state, navigate) {
       updateSelectorPos();
       initBrightSlider();
       refreshDotDisplays();
+      const tempSlider = container.querySelector('#white-temp-slider');
+      if (tempSlider) tempSlider.style.setProperty('--thumb-color', whiteTempToColor(whiteTemp));
     });
   }
 
@@ -369,32 +340,36 @@ export function renderHome(container, state, navigate) {
     if (!track || !thumb) return;
     const trackH = track.offsetHeight;
     const thumbH = thumb.offsetHeight;
-    const topPx = (1 - brightness / 100) * (trackH - thumbH);
+    const capR = 14; // matches border-radius of the track
+    // Keep the thumb center between the two rounded caps so it's never clipped
+    const minTop = capR - thumbH / 2;           // 14 - 11 = 3px
+    const maxTop = trackH - capR - thumbH / 2;  // 220 - 14 - 11 = 195px
+    const topPx = minTop + (1 - brightness / 100) * (maxTop - minTop);
     thumb.style.top = topPx + 'px';
   }
 
   function updateBrightTrackColor() {
     const track = container.querySelector('#bright-track');
     if (!track) return;
-    track.style.background = `linear-gradient(to top, #000000, ${getColor()})`;
+    track.style.background = `linear-gradient(to bottom, ${getColor()} 0%, #000000 100%)`;
   }
 
   // ── Movement bottom sheet ────────────────────────────────────────────────────
 
   function showMovementSheet() {
     const ICONS = {
-      'Stationary': '■',  'Chase': '⚡',  'Twinkle': '✨',  'Wave': '🌊',
-      'Fade': '🌫️',       'Meteor': '☄️', 'Pulse': '💓',   'Bounce': '↕',
+      'Stationary': '■', 'Chase': '⚡', 'Twinkle': '✨', 'Wave': '🌊',
+      'Fade': '🌫️', 'Meteor': '☄️', 'Pulse': '💓', 'Bounce': '↕',
     };
     const DESC = {
       'Stationary': 'All lights stay on',
-      'Chase':      'Lights run in sequence',
-      'Twinkle':    'Random sparkle effect',
-      'Wave':       'Rolling wave motion',
-      'Fade':       'Smooth fade in and out',
-      'Meteor':     'Shooting star effect',
-      'Pulse':      'Rhythmic breathing pulse',
-      'Bounce':     'Back and forth bounce',
+      'Chase': 'Lights run in sequence',
+      'Twinkle': 'Random sparkle effect',
+      'Wave': 'Rolling wave motion',
+      'Fade': 'Smooth fade in and out',
+      'Meteor': 'Shooting star effect',
+      'Pulse': 'Rhythmic breathing pulse',
+      'Bounce': 'Back and forth bounce',
     };
 
     const overlay = document.createElement('div');
@@ -428,6 +403,43 @@ export function renderHome(container, state, navigate) {
     });
   }
 
+  // ── Save pattern sheet ──────────────────────────────────────────────────────
+
+  function showSavePatternSheet() {
+    const overlay = document.createElement('div');
+    overlay.className = 'save-pattern-overlay';
+    overlay.innerHTML = `
+      <div class="save-pattern-sheet">
+        <div class="save-pattern-handle"></div>
+        <div class="save-pattern-title">Save Pattern</div>
+        <input class="pe-input" id="sps-name" type="text" value="My Pattern" placeholder="Pattern name" style="margin-bottom:16px;" />
+        <button class="hm-action-fill" id="sps-save">SAVE TO MY PATTERNS</button>
+      </div>
+    `;
+    document.getElementById('app-frame').appendChild(overlay);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    const input = overlay.querySelector('#sps-name');
+    input.select();
+    overlay.querySelector('#sps-save')?.addEventListener('click', () => {
+      const name = input.value.trim();
+      if (!name) { showToast('Please enter a name'); return; }
+      scenes.push({
+        id: Date.now(),
+        name,
+        categoryId: 'your-patterns',
+        colors: [...patternColors],
+        animation: selectedMovement,
+        direction: 'forward',
+        speed: 3,
+        favorite: false,
+      });
+      overlay.remove();
+      showToast(`Saved: ${name}`);
+      state.scenesTargetCategory = 'your-patterns';
+      setTimeout(() => navigate('scenes'), 400);
+    });
+  }
+
   // ── Event wiring ────────────────────────────────────────────────────────────
 
   function attachEvents() {
@@ -454,14 +466,18 @@ export function renderHome(container, state, navigate) {
       const label = container.querySelector('#temp-label');
       if (label) label.textContent = getTempValue(whiteTemp);
 
-      // Update LED dot directly with the white temperature color (don't move the wheel)
       const tempHex = whiteTempToColor(whiteTemp);
+
+      // Thumb color follows the temperature position (warm orange → white → cool blue)
+      e.target.style.setProperty('--thumb-color', tempHex);
+
+      // Update LED dot directly with the white temperature color (don't move the wheel)
       patternColors[activeDotIdx] = tempHex;
       refreshDotDisplays();
 
       // Update brightness track gradient to match the white tone
       const track = container.querySelector('#bright-track');
-      if (track) track.style.background = `linear-gradient(to top, #000000, ${tempHex})`;
+      if (track) track.style.background = `linear-gradient(to bottom, ${tempHex} 0%, #000000 100%)`;
     });
 
     // Color swatches
@@ -490,7 +506,7 @@ export function renderHome(container, state, navigate) {
     container.querySelector('#pattern-plus')?.addEventListener('click', () => {
       if (patternCount < 8) {
         patternCount++;
-        patternColors.push('#' + hslToHex(selectedHue, selectedSat, 55));
+        patternColors.push('#' + hslToHex(selectedHue, selectedSat, PATTERN_COLOR_LIGHTNESS));
         activeDotIdx = patternCount - 1;
         render();
       }
@@ -533,24 +549,6 @@ export function renderHome(container, state, navigate) {
       updateActiveDotColor();
     });
 
-    // Palette cards
-    container.querySelectorAll('.hm-palette-card').forEach(card => {
-      card.addEventListener('click', () => {
-        const idx = parseInt(card.dataset.paletteIdx);
-        const { h, s } = hexToHsl(colorPresets[idx].colors[0]);
-        selectedHue = h;
-        selectedSat = s;
-        updateSelectorPos();
-        updateBrightTrackColor();
-        updateActiveDotColor();
-        container.querySelectorAll('.hm-palette-card').forEach(c => c.classList.remove('active'));
-        card.classList.add('active');
-      });
-    });
-
-    // Zone select → zones screen
-    container.querySelector('#hm-zone-btn')?.addEventListener('click', () => navigate('zones'));
-
     // Settings
     container.querySelector('#hm-settings-btn')?.addEventListener('click', () => navigate('support'));
 
@@ -560,14 +558,17 @@ export function renderHome(container, state, navigate) {
       state.brightness = brightness;
       state.activeScene = 'Custom';
       state.selectedMovement = selectedMovement;
-      const hex = '#' + hslToHex(selectedHue, selectedSat, 55);
+      const hex = '#' + hslToHex(selectedHue, selectedSat, PATTERN_COLOR_LIGHTNESS);
+      state.activeColor = hex;
       if (!state.recentColors) state.recentColors = [...recentColors];
       state.recentColors = [hex, ...state.recentColors.filter(c => c !== hex)].slice(0, 16);
+      document.getElementById('nav-control')?.classList.remove('lights-off');
+      syncFabColor(hex);
       showToast('Pattern applied');
     });
 
     // Save As Pattern
-    container.querySelector('#home-save')?.addEventListener('click', () => navigate('control'));
+    container.querySelector('#home-save')?.addEventListener('click', () => showSavePatternSheet());
 
     // Patterns button
     container.querySelector('[data-action="patterns"]')?.addEventListener('click', () => navigate('scenes'));
@@ -579,47 +580,3 @@ export function renderHome(container, state, navigate) {
   render();
 }
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
-
-function hslToHex(h, s, l) {
-  s /= 100; l /= 100;
-  const a = s * Math.min(l, 1 - l);
-  const f = n => {
-    const k = (n + h / 30) % 12;
-    const c = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
-    return Math.round(255 * c).toString(16).padStart(2, '0');
-  };
-  return `${f(0)}${f(8)}${f(4)}`;
-}
-
-function hexToHsl(hex) {
-  hex = hex.replace('#', '');
-  const r = parseInt(hex.slice(0, 2), 16) / 255;
-  const g = parseInt(hex.slice(2, 4), 16) / 255;
-  const b = parseInt(hex.slice(4, 6), 16) / 255;
-  const max = Math.max(r, g, b), min = Math.min(r, g, b);
-  let h = 0, s = 0;
-  const l = (max + min) / 2;
-  if (max !== min) {
-    const d = max - min;
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-    switch (max) {
-      case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
-      case g: h = ((b - r) / d + 2) / 6; break;
-      case b: h = ((r - g) / d + 4) / 6; break;
-    }
-  }
-  return { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) };
-}
-
-function showToast(message) {
-  let toast = document.querySelector('.toast');
-  if (!toast) {
-    toast = document.createElement('div');
-    toast.className = 'toast';
-    document.getElementById('app-frame').appendChild(toast);
-  }
-  toast.textContent = message;
-  toast.classList.add('show');
-  setTimeout(() => toast.classList.remove('show'), 2000);
-}

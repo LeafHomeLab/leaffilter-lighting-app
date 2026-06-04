@@ -1,5 +1,6 @@
 import { scenes } from '../data/scenes.js';
 import { startRooflinePreview } from '../utils/rooflinePreview.js';
+import { showToast } from '../utils.js';
 
 const ANIMATIONS = ['Static', 'Chase', 'Wave', 'Fade', 'Twinkle', 'Sparkle', 'Bounce', 'Pulse', 'Gradient', 'Alternating'];
 
@@ -330,17 +331,6 @@ export function renderPatternEditor(container, state, navigate) {
     navigate('scenes');
   }
 
-  function showToast(message) {
-    let toast = document.querySelector('.toast');
-    if (!toast) {
-      toast = document.createElement('div');
-      toast.className = 'toast';
-      document.getElementById('app-frame').appendChild(toast);
-    }
-    toast.textContent = message;
-    toast.classList.add('show');
-    setTimeout(() => toast.classList.remove('show'), 2000);
-  }
 
   render();
 }

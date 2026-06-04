@@ -1,21 +1,22 @@
 import { scenes } from '../data/scenes.js';
+import { hslToHex, hexToHsl, showToast, syncFabColor, PATTERN_COLOR_LIGHTNESS } from '../utils.js';
 
 export function renderControl(container, state, navigate) {
   // Consume the base scene context once — presets are never modified
   const baseScene = state.controlBaseScene || null;
   if (baseScene) state.controlBaseScene = null;
 
-  const recentColors = ['#FFA852','#FF1744','#4CAF50','#2196F3','#E91E63','#FF6D00','#AA00FF','#FFD600','#00BFA5','#FFFFFF','#FF6B6B','#4ECDC4'];
+  const recentColors = ['#FFA852', '#FF1744', '#4CAF50', '#2196F3', '#E91E63', '#FF6D00', '#AA00FF', '#FFD600', '#00BFA5', '#FFFFFF', '#FF6B6B', '#4ECDC4'];
 
   const colorPresets = [
-    { name: 'Sunset',   colors: ['#FF4500', '#FF8C00', '#FFD700'] },
-    { name: 'Ocean',    colors: ['#006994', '#00BFFF', '#40E0D0'] },
-    { name: 'Forest',   colors: ['#228B22', '#32CD32', '#90EE90'] },
-    { name: 'Candy',    colors: ['#FF1493', '#FF69B4', '#DA70D6'] },
-    { name: 'Arctic',   colors: ['#87CEEB', '#B0E0E6', '#E0F0FF'] },
-    { name: 'Fire',     colors: ['#CC0000', '#FF4500', '#FF8C00'] },
+    { name: 'Sunset', colors: ['#FF4500', '#FF8C00', '#FFD700'] },
+    { name: 'Ocean', colors: ['#006994', '#00BFFF', '#40E0D0'] },
+    { name: 'Forest', colors: ['#228B22', '#32CD32', '#90EE90'] },
+    { name: 'Candy', colors: ['#FF1493', '#FF69B4', '#DA70D6'] },
+    { name: 'Arctic', colors: ['#87CEEB', '#B0E0E6', '#E0F0FF'] },
+    { name: 'Fire', colors: ['#CC0000', '#FF4500', '#FF8C00'] },
     { name: 'Lavender', colors: ['#6A0DAD', '#9370DB', '#DA70D6'] },
-    { name: 'Mint',     colors: ['#00CED1', '#20B2AA', '#7FFFD4'] },
+    { name: 'Mint', colors: ['#00CED1', '#20B2AA', '#7FFFD4'] },
   ];
   const whiteTemps = [
     { label: 'Candle', temp: 1800, color: '#FF9329' },
@@ -26,10 +27,13 @@ export function renderControl(container, state, navigate) {
     { label: 'Daylight', temp: 6500, color: '#B3D4FF' },
   ];
 
-  // Pre-load first color from base scene if present
+  // Priority: base scene > last active color > default blue
   let initialHsl = { h: 210, s: 80 };
   if (baseScene && baseScene.colors && baseScene.colors.length > 0) {
     const hsl = hexToHsl(baseScene.colors[0]);
+    initialHsl = { h: hsl.h, s: hsl.s };
+  } else if (state.activeColor) {
+    const hsl = hexToHsl(state.activeColor);
     initialHsl = { h: hsl.h, s: hsl.s };
   }
 
@@ -42,15 +46,15 @@ export function renderControl(container, state, navigate) {
   let activeWhiteIdx = 2;
 
   function getColor() {
-    return `hsl(${selectedHue}, ${selectedSat}%, 55%)`;
+    return `hsl(${selectedHue}, ${selectedSat}%, ${PATTERN_COLOR_LIGHTNESS}%)`;
   }
 
   function render() {
     const activeZoneNames = state.allZones.filter(z => z.active).map(z => z.name.split(' ')[0]);
     const zoneLabel = activeZoneNames.length === state.allZones.length ? 'All Zones'
       : activeZoneNames.length === 0 ? 'No Zone'
-      : activeZoneNames.length === 1 ? activeZoneNames[0]
-      : `${activeZoneNames.length} Zones`;
+        : activeZoneNames.length === 1 ? activeZoneNames[0]
+          : `${activeZoneNames.length} Zones`;
 
     const currentColor = getColor();
     const isEditMode = !!baseScene;
@@ -63,9 +67,9 @@ export function renderControl(container, state, navigate) {
           <div class="control-header-left">
             <div class="control-title">${isEditMode ? 'New Pattern' : 'Control Lights'}</div>
             ${isEditMode
-              ? `<div class="control-base-label">Based on: <span style="color:var(--accent)">${baseScene.name}</span></div>`
-              : `<div class="control-zone-label">${zoneLabel} · ${state.allZones.filter(z => z.active).reduce((a,z) => a + z.leds, 0)} LEDs</div>`
-            }
+        ? `<div class="control-base-label">Based on: <span style="color:var(--accent)">${baseScene.name}</span></div>`
+        : `<div class="control-zone-label">${zoneLabel} · ${state.allZones.filter(z => z.active).reduce((a, z) => a + z.leds, 0)} LEDs</div>`
+      }
           </div>
           <button class="control-power-btn ${state.lightsOn ? 'on' : ''}" id="ctrl-power">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18.36 6.64a9 9 0 11-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
@@ -163,7 +167,7 @@ export function renderControl(container, state, navigate) {
                 </div>
                 <div class="ctrl-rgb-hex">
                   <span class="ctrl-rgb-hex-label">#</span>
-                  <input type="text" class="ctrl-rgb-hex-input" id="rgb-hex" value="${hslToHex(selectedHue, selectedSat, 55)}" maxlength="6" />
+                  <input type="text" class="ctrl-rgb-hex-input" id="rgb-hex" value="${hslToHex(selectedHue, selectedSat, PATTERN_COLOR_LIGHTNESS)}" maxlength="6" />
                 </div>
               </div>
             ` : ''}
@@ -305,8 +309,8 @@ export function renderControl(container, state, navigate) {
     overlay.querySelector('#save-pattern-confirm').addEventListener('click', () => {
       const name = input.value.trim() || defaultName;
       const hexColors = baseScene
-        ? [hslToHex(selectedHue, selectedSat, 55), ...baseScene.colors.slice(1)]
-        : [hslToHex(selectedHue, selectedSat, 55)];
+        ? [hslToHex(selectedHue, selectedSat, PATTERN_COLOR_LIGHTNESS), ...baseScene.colors.slice(1)]
+        : [hslToHex(selectedHue, selectedSat, PATTERN_COLOR_LIGHTNESS)];
 
       const newScene = {
         id: Date.now(),
@@ -384,8 +388,12 @@ export function renderControl(container, state, navigate) {
 
     // Set Lights → apply immediately and navigate home
     container.querySelector('#ctrl-apply')?.addEventListener('click', () => {
+      const hex = '#' + hslToHex(selectedHue, selectedSat, PATTERN_COLOR_LIGHTNESS);
       state.lightsOn = true;
+      state.activeColor = hex;
       state.activeScene = 'Custom';
+      document.getElementById('nav-control')?.classList.remove('lights-off');
+      syncFabColor(hex);
       showToast('Lights updated');
       setTimeout(() => navigate('home'), 300);
     });
@@ -478,37 +486,3 @@ function updateRangeTrack(input, val, max) {
   input.style.background = `linear-gradient(to right, var(--accent) ${pct}%, var(--bg-quaternary) ${pct}%)`;
 }
 
-function hslToHex(h, s, l) {
-  s /= 100; l /= 100;
-  const a = s * Math.min(l, 1 - l);
-  const f = n => { const k = (n + h / 30) % 12; const c = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1); return Math.round(255 * c).toString(16).padStart(2, '0'); };
-  return `${f(0)}${f(8)}${f(4)}`;
-}
-
-function hexToHsl(hex) {
-  hex = hex.replace('#', '');
-  const r = parseInt(hex.slice(0, 2), 16) / 255;
-  const g = parseInt(hex.slice(2, 4), 16) / 255;
-  const b = parseInt(hex.slice(4, 6), 16) / 255;
-  const max = Math.max(r, g, b), min = Math.min(r, g, b);
-  let h = 0, s = 0;
-  const l = (max + min) / 2;
-  if (max !== min) {
-    const d = max - min;
-    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-    switch (max) {
-      case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
-      case g: h = ((b - r) / d + 2) / 6; break;
-      case b: h = ((r - g) / d + 4) / 6; break;
-    }
-  }
-  return { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) };
-}
-
-function showToast(message) {
-  let toast = document.querySelector('.toast');
-  if (!toast) { toast = document.createElement('div'); toast.className = 'toast'; document.getElementById('app-frame').appendChild(toast); }
-  toast.textContent = message;
-  toast.classList.add('show');
-  setTimeout(() => toast.classList.remove('show'), 2000);
-}

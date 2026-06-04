@@ -1,4 +1,5 @@
 import { scenes } from '../data/scenes.js';
+import { showToast } from '../utils.js';
 
 export function renderSchedule(container, state) {
   let viewMode = 'calendar';
@@ -490,10 +491,3 @@ export function renderSchedule(container, state) {
   render();
 }
 
-function showToast(message) {
-  let toast = document.querySelector('.toast');
-  if (!toast) { toast = document.createElement('div'); toast.className = 'toast'; document.getElementById('app-frame').appendChild(toast); }
-  toast.textContent = message;
-  toast.classList.add('show');
-  setTimeout(() => toast.classList.remove('show'), 2200);
-}

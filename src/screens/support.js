@@ -1,4 +1,10 @@
+import { connect, getHubAddress, HARDWARE_CONNECTED, getStatus } from '../api.js';
+import { showToast } from '../utils.js';
+
 export function renderSupport(container, state) {
+  const isConnected = HARDWARE_CONNECTED;
+  const currentIp = getHubAddress();
+
   const html = `
     <div class="screen" id="screen-support">
       <div class="screen-header">
@@ -8,28 +14,48 @@ export function renderSupport(container, state) {
         </button>
       </div>
 
+      <!-- Hardware Integration Configuration -->
+      <div class="section-label">Controller Integration</div>
+      <div class="card" style="margin-bottom: var(--space-md); border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); border-radius: var(--radius-md); padding: var(--space-md);">
+        <div style="display: flex; flex-direction: column; gap: var(--space-sm);">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-weight: var(--fw-semibold); font-size: var(--fs-body); color: var(--text-primary);">WLED Controller IP</span>
+            <span id="hub-connection-status" class="health-status ${isConnected ? 'good' : 'bad'}" style="font-size: var(--fs-xs); font-weight: var(--fw-semibold); text-transform: uppercase; letter-spacing: 0.05em; padding: 4px 8px; border-radius: 20px; background: ${isConnected ? 'rgba(46,204,113,0.15)' : 'rgba(231,76,60,0.15)'}; color: ${isConnected ? '#2ecc71' : '#e74c3c'};">
+              ${isConnected ? 'Connected' : 'Offline'}
+            </span>
+          </div>
+          <div style="display: flex; gap: var(--space-sm); margin-top: 4px;">
+            <input type="text" id="input-hub-ip" value="${currentIp}" placeholder="e.g. 192.168.1.42" style="flex: 1; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: var(--space-sm); background: rgba(0,0,0,0.2); color: var(--text-primary); font-size: var(--fs-small); font-family: monospace;" />
+            <button id="btn-save-ip" class="btn btn-primary" style="padding: 0 var(--space-md); font-size: var(--fs-small); height: 38px;">Connect</button>
+          </div>
+          <div style="font-size: var(--fs-xs); color: var(--text-tertiary); line-height: 1.4;">
+            Type in the IP address of your ESP32/QuinLED board to control physical lights.
+          </div>
+        </div>
+      </div>
+
       <!-- System Health Overview -->
       <div class="system-health-card">
         <div class="system-overall">
-          <div class="system-overall-icon good">✅</div>
+          <div class="system-overall-icon ${isConnected ? 'good' : 'warning'}" id="health-overall-icon">${isConnected ? '✅' : '⚠️'}</div>
           <div>
-            <div class="system-overall-title">All Systems Healthy</div>
-            <div class="system-overall-sub">Last checked 2 min ago</div>
+            <div class="system-overall-title" id="health-overall-title">${isConnected ? 'All Systems Healthy' : 'Running in Demo Mode'}</div>
+            <div class="system-overall-sub" id="health-overall-sub">${isConnected ? 'Hardware active' : 'Virtual lights only'}</div>
           </div>
         </div>
         <div class="health-item">
-          <div class="health-icon good">📡</div>
+          <div class="health-icon ${isConnected ? 'good' : 'bad'}" id="health-icon-controller">📡</div>
           <div class="health-info">
             <div class="health-label">Controller</div>
-            <div class="health-value">Main Controller · v2.4.1</div>
+            <div class="health-value" id="health-val-controller">${isConnected ? 'WLED Hub' : 'Main Controller · Disconnected'}</div>
           </div>
-          <span class="health-status good">Online</span>
+          <span class="health-status ${isConnected ? 'good' : 'bad'}" id="health-status-controller">${isConnected ? 'Online' : 'Offline'}</span>
         </div>
         <div class="health-item">
           <div class="health-icon good">📶</div>
           <div class="health-info">
             <div class="health-label">Wi-Fi Signal</div>
-            <div class="health-value">-42 dBm · Strong</div>
+            <div class="health-value" id="health-val-wifi">${isConnected ? '-55 dBm · Stable' : 'Local Host · Strong'}</div>
           </div>
           <span class="health-status good">Strong</span>
         </div>
@@ -37,23 +63,23 @@ export function renderSupport(container, state) {
           <div class="health-icon good">☁️</div>
           <div class="health-info">
             <div class="health-label">Cloud Connection</div>
-            <div class="health-value">Remote access enabled</div>
+            <div class="health-value">Virtual cloud relay active</div>
           </div>
           <span class="health-status good">Connected</span>
         </div>
         <div class="health-item">
-          <div class="health-icon good">💡</div>
+          <div class="health-icon ${isConnected ? 'good' : 'warning'}" id="health-icon-led">💡</div>
           <div class="health-info">
             <div class="health-label">LED Data Signal</div>
-            <div class="health-value">478 LEDs responding</div>
+            <div class="health-value" id="health-val-leds">${isConnected ? 'Ready' : 'Virtual simulator active'}</div>
           </div>
-          <span class="health-status good">OK</span>
+          <span class="health-status ${isConnected ? 'good' : 'warning'}" id="health-status-leds">${isConnected ? 'OK' : 'Virtual'}</span>
         </div>
         <div class="health-item">
           <div class="health-icon good">🔌</div>
           <div class="health-info">
             <div class="health-label">Power Supply</div>
-            <div class="health-value">350W · Normal load</div>
+            <div class="health-value">Power monitor standard</div>
           </div>
           <span class="health-status good">Normal</span>
         </div>
@@ -172,4 +198,107 @@ export function renderSupport(container, state) {
     </div>
   `;
   container.innerHTML = html;
+
+  const btnSave = container.querySelector('#btn-save-ip');
+  const inputIp = container.querySelector('#input-hub-ip');
+  const statusEl = container.querySelector('#hub-connection-status');
+
+  // Diagnostic items to update dynamically on connection
+  const overallIcon = container.querySelector('#health-overall-icon');
+  const overallTitle = container.querySelector('#health-overall-title');
+  const overallSub = container.querySelector('#health-overall-sub');
+  const controllerIcon = container.querySelector('#health-icon-controller');
+  const controllerVal = container.querySelector('#health-val-controller');
+  const controllerStatus = container.querySelector('#health-status-controller');
+  const wifiVal = container.querySelector('#health-val-wifi');
+  const ledIcon = container.querySelector('#health-icon-led');
+  const ledVal = container.querySelector('#health-val-leds');
+  const ledStatus = container.querySelector('#health-status-leds');
+
+  if (btnSave && inputIp && statusEl) {
+    btnSave.addEventListener('click', async () => {
+      const ip = inputIp.value.trim();
+      if (!ip) {
+        showToast('Please enter a valid IP address');
+        return;
+      }
+
+      btnSave.disabled = true;
+      btnSave.textContent = 'Connecting...';
+      statusEl.textContent = 'Testing...';
+      statusEl.style.background = 'rgba(241,196,15,0.15)';
+      statusEl.style.color = '#f1c40f';
+
+      try {
+        const res = await connect(ip);
+        if (res.connected) {
+          statusEl.textContent = 'Connected';
+          statusEl.style.background = 'rgba(46,204,113,0.15)';
+          statusEl.style.color = '#2ecc71';
+          statusEl.className = 'health-status good';
+
+          // Update System Diagnostic Cards
+          if (overallIcon) overallIcon.textContent = '✅';
+          if (overallIcon) overallIcon.className = 'system-overall-icon good';
+          if (overallTitle) overallTitle.textContent = 'All Systems Healthy';
+          if (overallSub) overallSub.textContent = 'Hardware active';
+
+          if (controllerIcon) controllerIcon.className = 'health-icon good';
+          if (controllerVal) controllerVal.textContent = `WLED Hub · v${res.firmwareVersion}`;
+          if (controllerStatus) {
+            controllerStatus.textContent = 'Online';
+            controllerStatus.className = 'health-status good';
+          }
+
+          if (wifiVal) wifiVal.textContent = '-55 dBm · Stable';
+
+          if (ledIcon) ledIcon.className = 'health-icon good';
+          if (ledVal) ledVal.textContent = `${res.ledCount} LEDs responding`;
+          if (ledStatus) {
+            ledStatus.textContent = 'OK';
+            ledStatus.className = 'health-status good';
+          }
+
+          showToast('Successfully paired with controller!');
+        } else {
+          statusEl.textContent = 'Offline';
+          statusEl.style.background = 'rgba(231,76,60,0.15)';
+          statusEl.style.color = '#e74c3c';
+          statusEl.className = 'health-status bad';
+
+          // Revert to demo mode settings
+          if (overallIcon) overallIcon.textContent = '⚠️';
+          if (overallIcon) overallIcon.className = 'system-overall-icon warning';
+          if (overallTitle) overallTitle.textContent = 'Running in Demo Mode';
+          if (overallSub) overallSub.textContent = 'Virtual lights only';
+
+          if (controllerIcon) controllerIcon.className = 'health-icon bad';
+          if (controllerVal) controllerVal.textContent = 'Main Controller · Disconnected';
+          if (controllerStatus) {
+            controllerStatus.textContent = 'Offline';
+            controllerStatus.className = 'health-status bad';
+          }
+
+          if (wifiVal) wifiVal.textContent = 'Local Host · Strong';
+
+          if (ledIcon) ledIcon.className = 'health-icon warning';
+          if (ledVal) ledVal.textContent = 'Virtual simulator active';
+          if (ledStatus) {
+            ledStatus.textContent = 'Virtual';
+            ledStatus.className = 'health-status warning';
+          }
+
+          showToast('Could not reach controller. Demo mode active.');
+        }
+      } catch (err) {
+        statusEl.textContent = 'Offline';
+        statusEl.style.background = 'rgba(231,76,60,0.15)';
+        statusEl.style.color = '#e74c3c';
+        showToast('Connection failed.');
+      } finally {
+        btnSave.disabled = false;
+        btnSave.textContent = 'Connect';
+      }
+    });
+  }
 }

@@ -692,42 +692,45 @@ input[type="range"]::-moz-range-thumb {
 .health-status.good { color: var(--status-online); background: rgba(29,185,107,0.1); }
 .health-status.warn { color: var(--status-warning); background: rgba(245,166,35,0.1); }
 
-/* --- Nav FAB override --- */
+/* --- Nav FAB --- */
 .nav-fab {
   position: relative;
-  width: 58px !important;
-  height: 58px !important;
-  border-radius: 50% !important;
-  background: var(--accent) !important;
-  color: var(--text-inverse) !important;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: var(--fab-color, var(--accent));
+  color: var(--text-inverse);
   margin-top: -22px;
   box-shadow:
     0 0 0 2px var(--bg-primary),
-    0 0 20px var(--accent-glow),
+    0 0 20px var(--fab-glow, var(--accent-glow)),
     0 6px 20px rgba(0,0,0,0.5);
-  transition: all var(--duration) var(--ease-spring) !important;
+  transition: background 0.4s ease, box-shadow 0.4s ease, transform var(--duration) var(--ease-spring);
   flex-shrink: 0;
-  display: flex !important;
+  display: flex;
   align-items: center;
   justify-content: center;
 }
-.nav-fab:active { transform: scale(0.88) !important; }
+.nav-fab:active { transform: scale(0.9); }
 .nav-fab.active {
   box-shadow:
     0 0 0 2px var(--bg-primary),
-    0 0 30px var(--accent-glow-strong),
+    0 0 30px var(--fab-glow, var(--accent-glow-strong)),
     0 8px 24px rgba(0,0,0,0.55);
 }
 .nav-fab-ring {
   position: absolute;
   inset: -5px;
   border-radius: 50%;
-  border: 1.5px solid var(--accent-glow);
+  border: 1.5px solid var(--fab-glow, var(--accent-glow));
   animation: pulseRing 2.5s ease infinite;
   pointer-events: none;
+  transition: border-color 0.4s ease;
 }
-.nav-fab-icon {
-  width: 24px; height: 24px;
-}
+.nav-fab-icon { width: 24px; height: 24px; }
 .nav-fab-icon * { stroke: var(--text-inverse); }
 .nav-fab span { display: none; }
+.nav-fab.lights-off .nav-fab-ring {
+  opacity: 0.15;
+  animation: none;
+}
