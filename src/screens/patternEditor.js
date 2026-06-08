@@ -235,7 +235,28 @@ export function renderPatternEditor(container, state, navigate) {
     container.querySelector('#pe-save')?.addEventListener('click', savePattern);
 
     // Delete (only for own patterns)
-    container.querySelector('#pe-delete')?.addEventListener('click', deletePattern);
+    container.querySelector('#pe-delete')?.addEventListener('click', () => {
+      const overlay = document.createElement('div');
+      overlay.className = 'cpicker-overlay';
+      overlay.innerHTML = `
+        <div class="cpicker-sheet">
+          <div class="cpicker-handle"></div>
+          <div class="cpicker-title">Remove Pattern?</div>
+          <div style="padding:0 16px 16px; display:flex; gap:8px;">
+            <button class="btn btn-secondary" id="pdel-cancel" style="flex:1;">Cancel</button>
+            <button class="btn" id="pdel-confirm" style="flex:1;background:#c0392b;color:#fff;border:none;">Delete</button>
+          </div>
+        </div>
+      `;
+      document.getElementById('app-frame').appendChild(overlay);
+      requestAnimationFrame(() => overlay.classList.add('open'));
+      overlay.querySelector('#pdel-cancel')?.addEventListener('click', () => overlay.remove());
+      overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+      overlay.querySelector('#pdel-confirm')?.addEventListener('click', () => {
+        overlay.remove();
+        deletePattern();
+      });
+    });
   }
 
   function openColorPicker() {

@@ -10,10 +10,9 @@
 // ─── FUTURE (v2) ────────────────────────────────────────────────────────────
 //  • Per-zone patterns: let customer toggle between zones on the home screen
 //    and assign a different color/effect to each zone independently.
-//    API already supports this via setPattern({ zoneIds: ['front'] }) — the
-//    work is on the UI side (zone selector bar + per-zone state tracking).
+//    API already supports this via setPattern({ zones: state.allZones.filter(z => z.active) })
 //  • Multi-controller: customer has 2+ hubs (e.g. house + outbuilding).
-//    Each hub is a separate WLED instance; app manages multiple IPs.
+//    Each hub is a separate WLED instance; use createController() to register.
 //  • Cloud relay: remote access via AWS IoT / MQTT when off home WiFi.
 //  • OTA firmware updates: push new WLED builds from the app.
 //
@@ -28,7 +27,6 @@
 //  • LeafFilter owns the controller (ESP32-based running WLED firmware) and
 //    the app. No Tuya dependency.
 //  • Max 4 zones per controller. Most homes use 1–2.
-// ─────────────────────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─── Configuration ────────────────────────────────────────────────────────────
@@ -62,71 +60,23 @@ export const WLED_EFFECT_MAP = {
  */
 export const MAX_ZONES_PER_CONTROLLER = 4;
 
-/**
- * Zone configuration — populated during installer setup, stored in localStorage.
- * Each entry: { id, name, segId, ledCount }
- *
- * Defaults to a single "All Lights" zone. The installer app (or onboarding flow)
- * calls configureZones() to set up the actual zone layout per-home.
- *
- * Multi-controller note: If a customer has a second controller (e.g., outbuilding),
- * it runs as a separate WLED instance with its own IP. The app would manage it
- * as a second "hub" — not as additional zones on the same controller.
- */
-let zoneConfig = JSON.parse(localStorage.getItem('leaflight_zones') || 'null') || [
-  { id: 'zone1', name: 'All Lights', segId: 0, ledCount: 50 },
-];
+// ─── Factory ──────────────────────────────────────────────────────────────────
 
 /**
- * Sets up the zone layout for this installation. Called once by the installer
- * during initial setup. Persists to localStorage.
+ * Creates a bare controller object. Zones are added after the installer completes
+ * the wiring survey and calls configureZones on the returned object.
  *
- * @param {Array<{ id: string, name: string, segId: number, ledCount: number }>} zones
- * @example
- *   configureZones([
- *     { id: 'front',  name: 'Front Roofline', segId: 0, ledCount: 60 },
- *     { id: 'garage', name: 'Garage',         segId: 1, ledCount: 25 },
- *   ]);
+ * @param {string} id  - Stable unique ID, e.g. 'ctrl-garage'
+ * @param {string} ip  - e.g. '192.168.1.43'
+ * @returns {{ id: string, name: string, ip: string, zones: [] }}
  */
-export function configureZones(zones) {
-  zoneConfig = zones.slice(0, MAX_ZONES_PER_CONTROLLER);
-  localStorage.setItem('leaflight_zones', JSON.stringify(zoneConfig));
-}
-
-/** Returns the current zone configuration. */
-export function getZones() {
-  return [...zoneConfig];
-}
-
-/** Looks up a zone by its ID. Returns undefined if not found. */
-export function getZoneById(id) {
-  return zoneConfig.find(z => z.id === id);
+export function createController(id, ip) {
+  return { id, name: id, ip, zones: [] };
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
- * Converts a hex color string to an [R, G, B, W] array for WLED RGBW payloads.
- * The white channel is auto-calculated: if the RGB values are roughly equal
- * (i.e., the user picked a white/warm tone), the common value is shifted into
- * the dedicated W channel for a cleaner white from the RGBW puck.
- *
- * @param {string} hex - e.g. "#FF1493" or "FF1493"
- * @returns {[number, number, number, number]}
- */
-function hexToRgbw(hex) {
-  hex = hex.replace('#', '');
-  const r = parseInt(hex.slice(0, 2), 16);
-  const g = parseInt(hex.slice(2, 4), 16);
-  const b = parseInt(hex.slice(4, 6), 16);
-
-  // Extract the white component: the minimum of R, G, B
-  // This gives cleaner whites on RGBW strips vs. mixing RGB to approximate white
-  const w = Math.min(r, g, b);
-  return [r - w, g - w, b - w, w];
-}
-
-/** Shorthand — returns RGB only (no white channel) for non-RGBW contexts. */
 function hexToRgb(hex) {
   hex = hex.replace('#', '');
   return [
@@ -303,23 +253,18 @@ export async function getHardwareInfo() {
 // ─── Core Control ─────────────────────────────────────────────────────────────
 
 /**
- * Applies a color, brightness, and movement pattern to one or more zones.
- * Targets all zones when zoneIds is omitted.
+ * Applies a color, brightness, and movement pattern to the given zones.
+ * Each zone object must carry its own segId — there is no internal lookup table.
  *
- * @param {{ color: string, brightness: number, movement: string, zoneIds?: string[] }} options
+ * @param {{ color: string, brightness: number, movement: string, zones?: Array<{segId: number}> }} options
  * @returns {Promise<void>}
  */
-export async function setPattern({ color, brightness, movement, zoneIds }) {
+export async function setPattern({ color, brightness, movement, zones = [] }) {
   const rgb = hexToRgb(color);
   const bri = brightnessToWled(brightness);
   const fx  = WLED_EFFECT_MAP[movement] ?? 0;
 
-  // Target specific zones by ID, or all configured zones if none specified
-  const targets = zoneIds
-    ? zoneConfig.filter(z => zoneIds.includes(z.id))
-    : zoneConfig;
-
-  const segments = targets.map(z => ({
+  const segments = zones.map(z => ({
     id: z.segId, col: [rgb], fx, sx: 128, ix: 128, bri, on: true,
   }));
 
@@ -338,12 +283,12 @@ export async function applyToHardware(state, patternColors = []) {
   if (!isHubConfigured()) return null;
 
   const activeZones = state.allZones.filter(z => z.active);
-  const segments = activeZones.map((zone, i) => {
+  const segments = activeZones.map(zone => {
     const colors = patternColors.length > 0
       ? patternColors.map(hexToRgb)
       : [[255, 255, 255]];
     return {
-      id: i,
+      id: zone.segId,  // segId from zone object — not the loop index
       on: state.lightsOn !== false,
       col: colors.slice(0, 3),
       fx: WLED_EFFECT_MAP[state.selectedMovement] ?? 0,
@@ -387,14 +332,15 @@ export async function setPower(on) {
 
 /**
  * Activates or deactivates a single zone (WLED segment on/off).
- * @param {string} zoneId - Must match an id in the zone config
+ * Pass the full zone object from state.allZones — segId is read directly.
+ *
+ * @param {{ segId: number }} zone - Zone object from state.allZones
  * @param {boolean} active
  * @returns {Promise<void>}
  */
-export async function setZoneActive(zoneId, active) {
-  const zone = getZoneById(zoneId);
-  if (!zone) {
-    console.warn(`[API] setZoneActive: unknown zone "${zoneId}"`);
+export async function setZoneActive(zone, active) {
+  if (!zone || zone.segId == null) {
+    console.warn('[API] setZoneActive: zone object with segId required');
     return;
   }
   return _post('/json/state', { seg: [{ id: zone.segId, on: active }] });
@@ -403,19 +349,18 @@ export async function setZoneActive(zoneId, active) {
 // ─── Scenes ───────────────────────────────────────────────────────────────────
 
 /**
- * Applies a scene across all zones. WLED supports up to 3 palette colors
+ * Applies a scene across the given zones. WLED supports up to 3 palette colors
  * (primary/secondary/tertiary) per segment; additional colors are ignored.
  *
- * @param {{ colors: string[], movement: string, speed?: number, brightness?: number }} scene
+ * @param {{ colors: string[], movement: string, speed?: number, brightness?: number, zones?: Array<{segId: number}> }} scene
  * @returns {Promise<void>}
  */
-export async function applyScene({ colors = [], movement = 'Stationary', speed = 128, brightness = 80 }) {
+export async function applyScene({ colors = [], movement = 'Stationary', speed = 128, brightness = 80, zones = [] }) {
   const rgbColors = colors.slice(0, 3).map(hexToRgb);
   const fx  = WLED_EFFECT_MAP[movement] ?? 0;
   const bri = brightnessToWled(brightness);
 
-  // Apply to all configured zones (same pattern everywhere)
-  const segments = zoneConfig.map(z => ({
+  const segments = zones.map(z => ({
     id: z.segId, col: rgbColors, fx, sx: speed, ix: 128, bri, on: true,
   }));
 
@@ -443,7 +388,7 @@ export async function syncSchedules(schedules) {
 //   import * as api from '../api.js';
 //
 // All calls can be fire-and-forget — hardware is offline-tolerant.
-// Pattern:  state.x = newValue; api.setX(newValue);
+// Pattern:  zone.active = newValue; api.setZoneActive(zone, newValue);
 //
 // ── src/main.js ──────────────────────────────────────────────────────────────
 //   WHEN:  App init, after onboarding confirms an IP address
@@ -455,7 +400,7 @@ export async function syncSchedules(schedules) {
 // ── src/screens/home.js ──────────────────────────────────────────────────────
 //   WHEN:  User confirms color+movement selection (~line 548)
 //   CALL:  api.setPattern({ color: hex, brightness, movement: selectedMovement,
-//                           zoneIds: state.activeZones })
+//                           zones: state.allZones.filter(z => z.active) })
 //
 //   WHEN:  Brightness slider settles (debounce 'input' ~200ms or on 'change')
 //   CALL:  api.setBrightness(brightness)
@@ -465,23 +410,25 @@ export async function syncSchedules(schedules) {
 //   CALL:  api.setLightsOn(state.lightsOn)
 //
 //   WHEN:  Zone chip toggled (individual zone, ~line 361)
-//   CALL:  api.setZoneActive(zoneId, active)
+//   CALL:  api.setZoneActive(zone, active)   // zone = full object from state.allZones
 //
 //   WHEN:  Brightness slider changes (~line 370) — debounce ~200ms
 //   CALL:  api.setBrightness(brightness)
 //
 //   WHEN:  Color or movement confirmed from control screen (~line 388)
-//   CALL:  api.setPattern({ color, brightness, movement, zoneIds: state.activeZones })
+//   CALL:  api.setPattern({ color, brightness, movement,
+//                           zones: state.allZones.filter(z => z.active) })
 //
 // ── src/screens/scenes.js ────────────────────────────────────────────────────
 //   WHEN:  User taps a scene card to apply it (~line 182)
 //   CALL:  api.applyScene({ colors: scene.colors, movement: scene.movement,
 //                           speed: scene.speed ?? 128,
-//                           brightness: state.brightness })
+//                           brightness: state.brightness,
+//                           zones: state.allZones.filter(z => z.active) })
 //
 // ── src/screens/zones.js ─────────────────────────────────────────────────────
 //   WHEN:  Individual zone toggle (~line 79)
-//   CALL:  api.setZoneActive(zoneId, zone.active)
+//   CALL:  api.setZoneActive(zone, zone.active)   // zone = full object
 //
 //   WHEN:  "All on" (~line 88)
 //   CALL:  api.setLightsOn(true)

@@ -1,15 +1,26 @@
 import { scenes } from '../data/scenes.js';
 import { showToast } from '../utils.js';
 
+// Maps zone IDs to short display names; empty zones array means "all active zones at fire time"
+function displayZones(schedule, allZones) {
+  const ids = schedule.zones;
+  if (!Array.isArray(ids) || ids.length === 0) return 'All Zones';
+  if (!allZones || allZones.length === 0) return ids.join(', ');
+  return ids.map(id => {
+    const z = allZones.find(z => z.id === id);
+    return z ? (z.shortName ?? z.name) : id;
+  }).join(', ');
+}
+
 export function renderSchedule(container, state) {
   let viewMode = 'calendar';
 
   let schedules = state.schedules ?? [
-    { id: 1, trigger: 'Sunset', time: 'Sunset',  ampm: '',   timeVal: '',      label: 'Every Day',      scene: 'Warm Architectural', zones: 'All Zones',           repeat: 'daily',    customDays: [], active: true  },
-    { id: 2, trigger: 'Time',   time: '11:30',    ampm: 'PM', timeVal: '23:30', label: 'Every Day',      scene: 'All Off',            zones: 'All Zones',           repeat: 'daily',    customDays: [], active: true  },
-    { id: 3, trigger: 'Time',   time: '5:00',     ampm: 'PM', timeVal: '17:00', label: 'Nov 25 – Jan 2', scene: 'Christmas Classic',  zones: 'All Zones',           repeat: 'seasonal', customDays: [], active: true  },
-    { id: 4, trigger: 'Time',   time: '6:00',     ampm: 'PM', timeVal: '18:00', label: 'Every Sunday',   scene: 'Game Day',           zones: 'Front, Peaks',        repeat: 'weekly-0', customDays: [], active: false },
-    { id: 5, trigger: 'Away',   time: 'Away',     ampm: '',   timeVal: '',      label: 'When Away',      scene: 'Security Sweep',     zones: 'All Zones',           repeat: 'away',     customDays: [], active: false },
+    { id: 1, trigger: 'Sunset', time: 'Sunset',  ampm: '',   timeVal: '',      label: 'Every Day',      scene: 'Warm Architectural', zones: [],                          repeat: 'daily',    customDays: [], active: true  },
+    { id: 2, trigger: 'Time',   time: '11:30',    ampm: 'PM', timeVal: '23:30', label: 'Every Day',      scene: 'All Off',            zones: [],                          repeat: 'daily',    customDays: [], active: true  },
+    { id: 3, trigger: 'Time',   time: '5:00',     ampm: 'PM', timeVal: '17:00', label: 'Nov 25 – Jan 2', scene: 'Christmas Classic',  zones: [],                          repeat: 'seasonal', customDays: [], active: true  },
+    { id: 4, trigger: 'Time',   time: '6:00',     ampm: 'PM', timeVal: '18:00', label: 'Every Sunday',   scene: 'Game Day',           zones: ['front','peaks'], repeat: 'weekly-0', customDays: [], active: false },
+    { id: 5, trigger: 'Away',   time: 'Away',     ampm: '',   timeVal: '',      label: 'When Away',      scene: 'Security Sweep',     zones: [],                          repeat: 'away',     customDays: [], active: false },
   ];
   state.schedules = schedules;
 
@@ -62,6 +73,29 @@ export function renderSchedule(container, state) {
     state.schedules = schedules;
     render();
     showToast('Schedule deleted');
+  }
+
+  function showDeleteConfirm(id) {
+    const overlay = document.createElement('div');
+    overlay.className = 'sched-create-overlay';
+    overlay.innerHTML = `
+      <div class="sched-create-sheet">
+        <div class="bottom-sheet-handle"></div>
+        <div class="sched-create-title">Delete Schedule?</div>
+        <div class="sched-create-actions">
+          <button class="btn btn-secondary" id="del-cancel" style="flex:1;">Cancel</button>
+          <button class="btn" id="del-confirm" style="flex:1;background:#c0392b;color:#fff;border:none;">Delete</button>
+        </div>
+      </div>
+    `;
+    document.getElementById('app-frame').appendChild(overlay);
+    requestAnimationFrame(() => overlay.querySelector('.sched-create-sheet')?.classList.add('open'));
+    overlay.querySelector('#del-cancel')?.addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    overlay.querySelector('#del-confirm')?.addEventListener('click', () => {
+      overlay.remove();
+      deleteSchedule(id);
+    });
   }
 
   function toggleSchedule(id, active) {
@@ -121,7 +155,7 @@ export function renderSchedule(container, state) {
               </div>
               <div class="schedule-info">
                 <div class="schedule-scene-name">${s.scene}</div>
-                <div class="schedule-meta">${s.label} · ${s.zones}</div>
+                <div class="schedule-meta">${s.label} · ${displayZones(s, state.allZones ?? [])}</div>
               </div>
               <label class="toggle">
                 <input type="checkbox" class="schedule-toggle" data-id="${s.id}" ${s.active ? 'checked' : ''} />
@@ -205,7 +239,7 @@ export function renderSchedule(container, state) {
     });
 
     container.querySelectorAll('.schedule-delete-btn').forEach(btn => {
-      btn.addEventListener('click', () => deleteSchedule(parseInt(btn.dataset.id)));
+      btn.addEventListener('click', () => showDeleteConfirm(parseInt(btn.dataset.id)));
     });
 
     container.querySelectorAll('.schedule-edit-btn').forEach(btn => {
@@ -271,7 +305,8 @@ export function renderSchedule(container, state) {
     let timeOffVal = existingSchedule?.timeOffVal ?? '23:00';
     let selectedId = existingSchedule?.sceneId ?? null;
     let sceneName  = existingSchedule?.scene ?? '';
-    let zonesVal   = existingSchedule?.zones ?? 'All Zones';
+    // zones is string[] of IDs; empty array = all active zones at fire time (UI prototype)
+    let selectedZoneIds = Array.isArray(existingSchedule?.zones) ? [...existingSchedule.zones] : [];
     let customDays = [...(existingSchedule?.customDays ?? [])];
 
     let repeatVal = 'Every Day';
@@ -337,11 +372,12 @@ export function renderSchedule(container, state) {
           `).join('')}
         </div>
 
-        <!-- Zones -->
+        <!-- Zones (UI prototype — IDs resolve to active segments at fire time, not executed by backend) -->
         <div class="sched-field-label" style="margin-top:var(--space-sm);">Zones</div>
-        <div class="sched-trigger-row">
-          ${['All Zones','Active Zones'].map(z =>
-            `<button class="sched-trigger-chip ${zonesVal === z ? 'active' : ''}" data-zones="${z}">${z}</button>`
+        <div class="sched-trigger-row" id="sched-zone-row">
+          <button class="sched-trigger-chip ${selectedZoneIds.length === 0 ? 'active' : ''}" data-zone-all>All Zones</button>
+          ${(state.allZones ?? []).map(z =>
+            `<button class="sched-trigger-chip ${selectedZoneIds.includes(z.id) ? 'active' : ''}" data-zone-id="${z.id}">${z.shortName ?? z.name}</button>`
           ).join('')}
         </div>
 
@@ -408,11 +444,24 @@ export function renderSchedule(container, state) {
       });
     });
 
-    // Zone chips
-    overlay.querySelectorAll('[data-zones]').forEach(chip => {
+    // Zone chips — multi-select; empty selectedZoneIds = all active zones at fire time
+    const zoneRow = overlay.querySelector('#sched-zone-row');
+    function updateZoneChips() {
+      zoneRow?.querySelector('[data-zone-all]')?.classList.toggle('active', selectedZoneIds.length === 0);
+      overlay.querySelectorAll('[data-zone-id]').forEach(c =>
+        c.classList.toggle('active', selectedZoneIds.includes(c.dataset.zoneId))
+      );
+    }
+    zoneRow?.querySelector('[data-zone-all]')?.addEventListener('click', () => {
+      selectedZoneIds = [];
+      updateZoneChips();
+    });
+    overlay.querySelectorAll('[data-zone-id]').forEach(chip => {
       chip.addEventListener('click', () => {
-        zonesVal = chip.dataset.zones;
-        overlay.querySelectorAll('[data-zones]').forEach(c => c.classList.toggle('active', c.dataset.zones === zonesVal));
+        const id = chip.dataset.zoneId;
+        const idx = selectedZoneIds.indexOf(id);
+        if (idx === -1) selectedZoneIds.push(id); else selectedZoneIds.splice(idx, 1);
+        updateZoneChips();
       });
     });
 
@@ -468,7 +517,7 @@ export function renderSchedule(container, state) {
         label:      labelMap[repeatVal] ?? repeatVal,
         scene,
         sceneId:    selectedId,
-        zones:      zonesVal,
+        zones:      [...selectedZoneIds],
         repeat:     repeatMap[repeatVal] ?? 'daily',
         customDays: repeatVal === 'Custom' ? [...customDays] : [],
         active:     true,

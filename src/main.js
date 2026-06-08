@@ -16,31 +16,32 @@ import { connect } from './api.js';
 
 
 // ===== STATE PERSISTENCE =====
-const PERSIST_KEY = 'lf_state_v1';
-const STATE_VERSION = 1;
+const PERSIST_KEY    = 'lf_state_v2';
+const V1_PERSIST_KEY = 'lf_state_v1';
+const STATE_VERSION  = 2;
 const RECENT_COLORS_CAP = 16;
 
+// activeZones is derived; allZones lives in controllers — neither is persisted directly
 const PERSIST_FIELDS = [
   'lightsOn', 'brightness', 'activeScene', 'activeColor',
-  'selectedMovement', 'recentColors', 'activeZones',
+  'selectedMovement', 'recentColors',
   'schedules', 'vacationActive', 'vacationScene',
   'vacationBehavior', 'vacationOnTime', 'vacationOffTime',
 ];
 
-/**
- * Persistence strategy: whitelist of fields saved to a single localStorage key.
- * Autosaves every 2s via setInterval + on tab close via beforeunload.
- * allZones stores only { id, active } so new zones added in future versions
- * automatically appear with their default active value rather than being dropped.
- * Version mismatch discards stale data so schema changes never corrupt state.
- */
 function saveState(state) {
   try {
     const snapshot = { _version: STATE_VERSION };
     for (const key of PERSIST_FIELDS) {
       snapshot[key] = state[key];
     }
-    snapshot.allZones = state.allZones.map(z => ({ id: z.id, active: z.active }));
+    // Save only the mutable per-zone fields; static fields (name, leds, segId) come from defaults
+    snapshot.controllers = state.controllers.map(ctrl => ({
+      id: ctrl.id,
+      zones: ctrl.zones.map(z => ({
+        id: z.id, active: z.active, color: z.color, brightness: z.brightness, scene: z.scene,
+      })),
+    }));
     if (Array.isArray(snapshot.recentColors)) {
       snapshot.recentColors = snapshot.recentColors.slice(0, RECENT_COLORS_CAP);
     }
@@ -50,23 +51,64 @@ function saveState(state) {
   }
 }
 
-function loadPersistedState(defaultZones) {
+// Pulls active-zone flags from v1 snapshot so the user's toggle state survives the upgrade
+function migrateFromV1(defaultControllers) {
+  try {
+    const raw = localStorage.getItem(V1_PERSIST_KEY);
+    if (!raw) return null;
+    const { _version, allZones: storedZones, activeZones, ...data } = JSON.parse(raw);
+    if (_version !== 1) return null;
+    console.info('lf: migrating persisted state v1 → v2');
+    const activeMap = {};
+    if (storedZones) {
+      for (const z of storedZones) activeMap[z.id] = z.active;
+    }
+    const controllers = defaultControllers.map(ctrl => ({
+      ...ctrl,
+      zones: ctrl.zones.map(z => ({
+        ...z,
+        active: z.id in activeMap ? activeMap[z.id] : z.active,
+      })),
+    }));
+    localStorage.removeItem(V1_PERSIST_KEY);
+    return { ...data, controllers };
+  } catch (err) {
+    console.warn('lf: v1 migration failed', err);
+    return null;
+  }
+}
+
+function loadPersistedState(defaultControllers) {
   try {
     const raw = localStorage.getItem(PERSIST_KEY);
-    if (!raw) return {};
-    const { _version, allZones: storedZones, ...data } = JSON.parse(raw);
+    if (!raw) return migrateFromV1(defaultControllers) ?? {};
+    const { _version, controllers: savedControllers, ...data } = JSON.parse(raw);
     if (_version !== STATE_VERSION) {
       console.info('lf: persisted state version mismatch — resetting to defaults');
       localStorage.removeItem(PERSIST_KEY);
       return {};
     }
-    if (storedZones) {
-      const activeMap = Object.fromEntries(storedZones.map(z => [z.id, z.active]));
-      data.allZones = defaultZones.map(z => ({
-        ...z,
-        active: z.id in activeMap ? activeMap[z.id] : z.active,
+    if (savedControllers) {
+      // Build a flat id→saved map, then re-hydrate against current defaults so
+      // new zones added in code automatically appear with their default values
+      const zoneOverrides = {};
+      for (const ctrl of savedControllers) {
+        for (const z of ctrl.zones) zoneOverrides[z.id] = z;
+      }
+      data.controllers = defaultControllers.map(ctrl => ({
+        ...ctrl,
+        zones: ctrl.zones.map(z => {
+          const saved = zoneOverrides[z.id];
+          if (!saved) return { ...z };
+          return {
+            ...z,
+            active:     saved.active,
+            color:      saved.color      ?? null,
+            brightness: saved.brightness ?? null,
+            scene:      saved.scene      ?? null,
+          };
+        }),
       }));
-      data.activeZones = data.allZones.filter(z => z.active).map(z => z.id);
     }
     return data;
   } catch (err) {
@@ -76,15 +118,18 @@ function loadPersistedState(defaultZones) {
 }
 
 // ===== APP STATE =====
-const DEFAULT_ZONES = [
-  { id: 'front',     name: 'Front Roofline', leds: 148, active: true  },
-  { id: 'garage',    name: 'Garage',         leds: 52,  active: true  },
-  { id: 'peaks',     name: 'Peaks',          leds: 36,  active: true  },
-  { id: 'left',      name: 'Left Side',      leds: 64,  active: true  },
-  { id: 'right',     name: 'Right Side',     leds: 58,  active: false },
-  { id: 'back',      name: 'Backyard',       leds: 96,  active: false },
-  { id: 'patio',     name: 'Patio',          leds: 44,  active: false },
-  { id: 'landscape', name: 'Landscape',      leds: 80,  active: false },
+const DEFAULT_CONTROLLERS = [
+  {
+    id: 'ctrl-main',
+    name: 'Main House',
+    ip: '',
+    zones: [
+      { id: 'front',  name: 'Front Roofline', shortName: 'Front',  leds: 148, segId: 0, active: true,  color: null, brightness: null, scene: null },
+      { id: 'garage', name: 'Garage',         shortName: 'Garage', leds: 52,  segId: 1, active: true,  color: null, brightness: null, scene: null },
+      { id: 'peaks',  name: 'Peaks',          shortName: 'Peaks',  leds: 36,  segId: 2, active: true,  color: null, brightness: null, scene: null },
+      { id: 'left',   name: 'Left Side',      shortName: 'Left',   leds: 64,  segId: 3, active: true,  color: null, brightness: null, scene: null },
+    ],
+  },
 ];
 
 const state = {
@@ -97,9 +142,11 @@ const state = {
   selectedMovement: 'Stationary',
   recentColors: null,
 
-  // Zone config
-  activeZones: ['front', 'garage', 'peaks', 'left'],
-  allZones: DEFAULT_ZONES.map(z => ({ ...z })),
+  // Source of truth for zone data — screens use allZones / activeZones getters below
+  controllers: DEFAULT_CONTROLLERS.map(ctrl => ({
+    ...ctrl,
+    zones: ctrl.zones.map(z => ({ ...z })),
+  })),
 
   // Control screen
   controlBaseScene: null,
@@ -117,8 +164,25 @@ const state = {
   vacationOffTime: '23:00',
 };
 
+// Computed views over controllers.zones — all existing screen files continue to work
+// unchanged. No-op setters prevent throws when legacy code assigns to these properties.
+Object.defineProperties(state, {
+  allZones: {
+    get()  { return this.controllers.flatMap(c => c.zones); },
+    set()  {},
+    enumerable: false,
+    configurable: true,
+  },
+  activeZones: {
+    get()  { return this.controllers.flatMap(c => c.zones).filter(z => z.active).map(z => z.id); },
+    set()  {},
+    enumerable: false,
+    configurable: true,
+  },
+});
+
 // Persisted values win; new keys added to the initial state keep their defaults
-Object.assign(state, loadPersistedState(DEFAULT_ZONES));
+Object.assign(state, loadPersistedState(DEFAULT_CONTROLLERS));
 
 // ===== ROUTER =====
 const screens = {
@@ -159,7 +223,6 @@ function updateFabAppearance() {
     if (state.activeColor) {
       syncFabColor(state.activeColor);
     } else {
-      // No active color yet — clear any stale inline styles, let CSS accent show
       fab.style.removeProperty('--fab-color');
       fab.style.removeProperty('--fab-glow');
       fab.style.background = '';
@@ -178,6 +241,7 @@ function updateFabAppearance() {
 function init() {
   setInterval(() => saveState(state), 2000);
   window.addEventListener('beforeunload', () => saveState(state));
+  window.addEventListener('lf:save-state', () => saveState(state));
 
   const updateTime = () => {
     const now = new Date();

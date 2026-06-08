@@ -87,6 +87,7 @@ export function renderHome(container, state, navigate) {
             </div>
           </div>
           <div class="hm-header-right">
+            <button class="hm-zone-btn" id="hm-zone-btn">SELECT ZONES</button>
             <button class="hm-settings-btn" id="hm-settings-btn" aria-label="Settings">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
             </button>
@@ -354,6 +355,30 @@ export function renderHome(container, state, navigate) {
     track.style.background = `linear-gradient(to bottom, ${getColor()} 0%, #000000 100%)`;
   }
 
+  // Surgically updates the pattern dot row without triggering a full re-render + screen-entry animation
+  function updatePatternRow() {
+    const countEl = container.querySelector('.hm-pattern-count');
+    if (countEl) countEl.textContent = `Repeat every ${patternCount} LED${patternCount > 1 ? 's' : ''}`;
+
+    const dotsEl = container.querySelector('.hm-pattern-dots');
+    if (!dotsEl) return;
+    dotsEl.innerHTML = patternColors.map((c, i) =>
+      `<div class="hm-pattern-dot${i === activeDotIdx ? ' active' : ''}" data-dot-idx="${i}" style="background:${c};box-shadow:0 0 8px ${c}88;"></div>`
+    ).join('');
+    dotsEl.querySelectorAll('.hm-pattern-dot').forEach((dot, i) => {
+      dot.addEventListener('click', () => {
+        activeDotIdx = i;
+        const { h, s } = hexToHsl(patternColors[i]);
+        selectedHue = h;
+        selectedSat = s;
+        container.querySelectorAll('.hm-pattern-dot').forEach((d, j) => d.classList.toggle('active', j === i));
+        updateSelectorPos();
+        updateBrightTrackColor();
+      });
+    });
+    refreshDotDisplays();
+  }
+
   // ── Movement bottom sheet ────────────────────────────────────────────────────
 
   function showMovementSheet() {
@@ -440,6 +465,73 @@ export function renderHome(container, state, navigate) {
     });
   }
 
+  // ── Zone & Controller sheet ─────────────────────────────────────────────────
+
+  function showZoneSheet() {
+    let activeCtrlId = state.controllers[0]?.id ?? null;
+
+    function buildZoneChips() {
+      const ctrl = state.controllers.find(c => c.id === activeCtrlId);
+      if (!ctrl) return '';
+      return ctrl.zones.map(z =>
+        `<button class="ctrl-zone-chip ${z.active ? 'active' : ''}" data-zone-id="${z.id}">${z.shortName ?? z.name}</button>`
+      ).join('');
+    }
+
+    const overlay = document.createElement('div');
+    overlay.className = 'save-pattern-overlay';
+    overlay.innerHTML = `
+      <div class="save-pattern-sheet">
+        <div class="save-pattern-handle"></div>
+        <div class="save-pattern-title">Select Zones</div>
+        <div class="sched-field-label">Controller</div>
+        <div class="sched-trigger-row" id="zs-ctrl-row">
+          ${state.controllers.map(ctrl =>
+            `<button class="sched-trigger-chip ${ctrl.id === activeCtrlId ? 'active' : ''}" data-ctrl-id="${ctrl.id}">${ctrl.name}</button>`
+          ).join('')}
+        </div>
+        <div class="sched-field-label" style="margin-top:var(--space-sm);">Zones</div>
+        <div class="sched-trigger-row" id="zs-zone-row" style="flex-wrap:wrap;">
+          ${buildZoneChips()}
+        </div>
+        <button class="hm-action-fill" id="zs-done" style="margin-top:var(--space-md);">Done</button>
+      </div>
+    `;
+
+    document.getElementById('app-frame').appendChild(overlay);
+    overlay.addEventListener('click', e => { if (e.target === overlay) { overlay.remove(); render(); } });
+
+    overlay.querySelectorAll('[data-ctrl-id]').forEach(chip => {
+      chip.addEventListener('click', () => {
+        activeCtrlId = chip.dataset.ctrlId;
+        overlay.querySelectorAll('[data-ctrl-id]').forEach(c =>
+          c.classList.toggle('active', c.dataset.ctrlId === activeCtrlId)
+        );
+        const zoneRow = overlay.querySelector('#zs-zone-row');
+        if (zoneRow) zoneRow.innerHTML = buildZoneChips();
+        attachZoneEvents();
+      });
+    });
+
+    function attachZoneEvents() {
+      overlay.querySelectorAll('[data-zone-id]').forEach(chip => {
+        chip.addEventListener('click', () => {
+          const zone = state.allZones.find(z => z.id === chip.dataset.zoneId);
+          if (!zone) return;
+          zone.active = !zone.active;
+          chip.classList.toggle('active', zone.active);
+        });
+      });
+    }
+
+    attachZoneEvents();
+
+    overlay.querySelector('#zs-done')?.addEventListener('click', () => {
+      overlay.remove();
+      render();
+    });
+  }
+
   // ── Event wiring ────────────────────────────────────────────────────────────
 
   function attachEvents() {
@@ -508,7 +600,7 @@ export function renderHome(container, state, navigate) {
         patternCount++;
         patternColors.push('#' + hslToHex(selectedHue, selectedSat, PATTERN_COLOR_LIGHTNESS));
         activeDotIdx = patternCount - 1;
-        render();
+        updatePatternRow();
       }
     });
     container.querySelector('#pattern-minus')?.addEventListener('click', () => {
@@ -516,7 +608,7 @@ export function renderHome(container, state, navigate) {
         patternCount--;
         patternColors.pop();
         activeDotIdx = Math.min(activeDotIdx, patternCount - 1);
-        render();
+        updatePatternRow();
       }
     });
 
@@ -549,6 +641,9 @@ export function renderHome(container, state, navigate) {
       updateActiveDotColor();
     });
 
+    // Zone & controller picker
+    container.querySelector('#hm-zone-btn')?.addEventListener('click', () => showZoneSheet());
+
     // Settings
     container.querySelector('#hm-settings-btn')?.addEventListener('click', () => navigate('support'));
 
@@ -570,8 +665,11 @@ export function renderHome(container, state, navigate) {
     // Save As Pattern
     container.querySelector('#home-save')?.addEventListener('click', () => showSavePatternSheet());
 
-    // Patterns button
-    container.querySelector('[data-action="patterns"]')?.addEventListener('click', () => navigate('scenes'));
+    // Patterns button — clear any saved category target so scenes always opens the category grid
+    container.querySelector('[data-action="patterns"]')?.addEventListener('click', () => {
+      state.scenesTargetCategory = null;
+      navigate('scenes');
+    });
 
     // Movement → opens bottom sheet
     container.querySelector('#movement-toggle')?.addEventListener('click', () => showMovementSheet());

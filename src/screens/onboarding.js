@@ -6,6 +6,7 @@ export function renderOnboarding(container, state, navigate) {
   let scanState = 'searching'; // searching | found | failed
   let selectedNetwork = '';
   let zoneNames = ['Front Roofline', 'Garage', 'Peaks', 'Left Side', 'Right Side', 'Backyard'];
+  let zoneLeds = zoneNames.map((_, i) => [148, 52, 36, 64][i] ?? 36);
 
   const steps = ['welcome', 'scan', 'found', 'wifi', 'zones', 'test', 'done'];
 
@@ -16,7 +17,13 @@ export function renderOnboarding(container, state, navigate) {
   let pairedDevice = null;   // { deviceId, name, rssi }
   let deviceInfo = null;     // { serial, firmware, ledCount, zones }
   let provisionedIp = null;  // e.g. '192.168.1.42'
-  let pairStepStates = {     // Tracks real-time pairing progress
+  let wifiError = null;
+
+  // ── Pairing step state ──
+  // Guard: prevents re-entering startBlePairing() on every render() call
+  let pairingStarted = false;
+  let pairingComplete = false;
+  let pairStepStates = {
     detected: 'done',
     bluetooth: 'pending',
     network: 'pending',
@@ -63,6 +70,7 @@ export function renderOnboarding(container, state, navigate) {
         <p class="onboarding-subtitle">Premium roofline lighting — right at your fingertips. Let's get your system set up.</p>
         <button class="btn btn-primary ob-cta" id="ob-next">Get Started</button>
         <button class="btn btn-ghost ob-cta-secondary" id="ob-skip">Already have an account?  Sign In</button>
+        ${import.meta.env?.DEV ? `<button class="btn btn-ghost ob-cta-secondary" id="ob-dev-skip" style="opacity:0.45;font-size:12px;margin-top:8px;">Dev: Skip to App →</button>` : ''}
       `;
 
       case 'scan': return `
@@ -70,18 +78,18 @@ export function renderOnboarding(container, state, navigate) {
           ${scanState === 'searching' ? '📡' : scanState === 'found' ? '✅' : '❌'}
         </div>
         <h2 class="onboarding-title" style="font-size: 22px;">
-          ${scanState === 'searching' ? 'Searching for Controller' : scanState === 'found' ? 'Controller Found!' : 'Nothing Found'}
+          ${scanState === 'searching' ? 'Looking for Your Controller' : scanState === 'found' ? 'Controller Found!' : 'Nothing Nearby'}
         </h2>
         <p class="onboarding-subtitle">
           ${scanState === 'searching'
           ? 'Make sure your LeafFilter controller is powered on and within range.'
           : scanState === 'found'
             ? `LeafFilter Controller ${pairedDevice?.name || 'LF-2024'} detected${ble.BLE_AVAILABLE ? ' via Bluetooth' : ' on your network'}.`
-            : 'Make sure the controller is powered on, then try again.'}
+            : "We couldn't find a controller. Make sure it's powered on and close by, then try again."}
         </p>
         ${scanState === 'searching' ? `
           <div class="ob-scan-bar"><div class="ob-scan-fill"></div></div>
-          <button class="btn btn-ghost ob-cta-secondary" id="ob-manual">Add manually instead</button>
+          <button class="btn btn-ghost ob-cta-secondary" id="ob-manual">Set up manually instead</button>
         ` : scanState === 'found' ? `
           <div class="ob-found-card">
             <div class="ob-found-icon">📡</div>
@@ -93,7 +101,7 @@ export function renderOnboarding(container, state, navigate) {
           <button class="btn btn-primary ob-cta" id="ob-next">Connect</button>
         ` : `
           <button class="btn btn-primary ob-cta" id="ob-retry">Try Again</button>
-          <button class="btn btn-ghost ob-cta-secondary" id="ob-manual">Add manually</button>
+          <button class="btn btn-ghost ob-cta-secondary" id="ob-manual">Set up manually instead</button>
         `}
       `;
 
@@ -113,27 +121,32 @@ export function renderOnboarding(container, state, navigate) {
             <div class="ob-connect-ring"></div>
             <div class="ob-connect-icon">🔗</div>
           </div>
-          <h2 class="onboarding-title" style="font-size: 22px;">Pairing Controller</h2>
-          <p class="onboarding-subtitle">Establishing a secure connection to your LeafFilter system...</p>
+          <h2 class="onboarding-title" style="font-size: 22px;">Setting Up Your System</h2>
+          <p class="onboarding-subtitle">${pairingComplete ? 'Your controller is connected and ready.' : 'Just a moment while we get everything ready...'}</p>
           <div class="ob-steps-list">
             <div class="ob-step-item ${stepClass('detected')}">
               ${stepIcon('detected')}
-              <span>Controller detected</span>
+              <span>Controller found</span>
             </div>
             <div class="ob-step-item ${stepClass('bluetooth')}">
               ${stepIcon('bluetooth')}
-              <span>Bluetooth handshake</span>
+              <span>Securing connection</span>
             </div>
             <div class="ob-step-item ${stepClass('network')}">
               ${stepIcon('network')}
-              <span>Connecting to network...</span>
+              <span>Joining your Wi-Fi</span>
             </div>
             <div class="ob-step-item ${stepClass('leds')}">
               ${stepIcon('leds')}
-              <span>Verifying LED chain</span>
+              <span>Discovering your lights</span>
             </div>
           </div>
-          <button class="btn btn-primary ob-cta" id="ob-next" style="margin-top: 32px;">Continue</button>
+          <button
+            class="btn btn-primary ob-cta"
+            id="ob-next"
+            style="margin-top: 32px;${!pairingComplete ? 'opacity:0.35;pointer-events:none;' : ''}"
+            ${!pairingComplete ? 'disabled aria-disabled="true"' : ''}
+          >Continue</button>
         `;
       }
 
@@ -150,11 +163,16 @@ export function renderOnboarding(container, state, navigate) {
             </button>
           `).join('')}
         </div>
-        ${selectedNetwork ? `
+        ${selectedNetwork && !wifiError ? `
           <div class="ob-wifi-pass">
             <input type="password" placeholder="Wi-Fi password" class="ob-pass-input" id="wifi-pass" />
           </div>
           <button class="btn btn-primary ob-cta" id="ob-wifi-connect">Connect</button>
+        ` : ''}
+        ${wifiError ? `
+          <p style="color:var(--error,#ff4d4d);font-size:14px;margin-top:12px;text-align:center;">${wifiError}</p>
+          <button class="btn btn-primary ob-cta" id="ob-wifi-retry">Try Again</button>
+          <button class="btn btn-ghost ob-cta-secondary" id="ob-wifi-demo">Continue in demo mode</button>
         ` : ''}
       `;
 
@@ -167,6 +185,7 @@ export function renderOnboarding(container, state, navigate) {
             <div class="ob-zone-row">
               <div class="ob-zone-num">${i + 1}</div>
               <input type="text" class="ob-zone-input" value="${name}" data-zone="${i}" />
+              <input type="number" class="ob-zone-leds" value="${zoneLeds[i] ?? 36}" min="1" max="600" data-zone="${i}" style="width:64px;" />
             </div>
           `).join('')}
         </div>
@@ -215,11 +234,21 @@ export function renderOnboarding(container, state, navigate) {
 
   function attachEvents() {
     container.querySelector('#ob-back')?.addEventListener('click', () => {
-      if (step > 0) { step--; render(); }
+      if (step > 0) {
+        // Leaving the found step resets pairing so it can re-run if they return
+        if (steps[step] === 'found') {
+          pairingStarted = false;
+          pairingComplete = false;
+          pairStepStates = { detected: 'done', bluetooth: 'pending', network: 'pending', leds: 'pending' };
+        }
+        step--;
+        render();
+      }
     });
 
     container.querySelector('#ob-next')?.addEventListener('click', () => {
       if (steps[step] === 'scan' && scanState !== 'found') return;
+      if (steps[step] === 'found' && !pairingComplete) return;
       step = Math.min(step + 1, steps.length - 1);
       render();
     });
@@ -235,15 +264,35 @@ export function renderOnboarding(container, state, navigate) {
       navigate('home');
     });
 
-    container.querySelector('#ob-finish')?.addEventListener('click', async () => {
-      // Disconnect BLE — we're done provisioning, HTTP takes over
-      await ble.disconnect();
+    container.querySelector('#ob-dev-skip')?.addEventListener('click', () => {
       localStorage.setItem('lf_onboarded', '1');
       navigate('home');
     });
 
+    container.querySelector('#ob-finish')?.addEventListener('click', async () => {
+      await ble.disconnect();
+
+      const zones = state.controllers?.[0]?.zones;
+      if (zones) {
+        zoneNames.forEach((name, i) => {
+          if (zones[i]) {
+            zones[i].name = name;
+            zones[i].leds = zoneLeds[i] ?? 36;
+          }
+        });
+      }
+      if (state.controllers?.[0] && provisionedIp) {
+        state.controllers[0].ip = provisionedIp;
+      }
+      window.dispatchEvent(new CustomEvent('lf:save-state'));
+
+      localStorage.setItem('lf_onboarded', '1');
+      navigate('home');
+    });
+
+    // "Set up manually" skips the pairing step entirely and goes to Wi-Fi entry
     container.querySelector('#ob-manual')?.addEventListener('click', () => {
-      step++;
+      step = steps.indexOf('wifi');
       render();
     });
 
@@ -252,8 +301,9 @@ export function renderOnboarding(container, state, navigate) {
       startBleScan();
     }
 
-    // ── BLE: Auto-start pairing when entering the found step ──
-    if (steps[step] === 'found') {
+    // ── BLE: Auto-start pairing once when entering the found step ──
+    if (steps[step] === 'found' && !pairingStarted) {
+      pairingStarted = true;
       startBlePairing();
     }
 
@@ -279,6 +329,25 @@ export function renderOnboarding(container, state, navigate) {
       });
     });
 
+    // Zone LED count inputs
+    container.querySelectorAll('.ob-zone-leds').forEach(input => {
+      input.addEventListener('change', e => {
+        zoneLeds[parseInt(input.dataset.zone)] = parseInt(e.target.value) || 36;
+      });
+    });
+
+    // Wi-Fi error recovery buttons
+    container.querySelector('#ob-wifi-retry')?.addEventListener('click', () => {
+      wifiError = null;
+      render();
+    });
+
+    container.querySelector('#ob-wifi-demo')?.addEventListener('click', () => {
+      wifiError = null;
+      step++;
+      render();
+    });
+
     // Test zone buttons
     container.querySelectorAll('.ob-test-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -298,16 +367,11 @@ export function renderOnboarding(container, state, navigate) {
 
   // ─── BLE Workflows ──────────────────────────────────────────────────────────
 
-  /**
-   * Scans for LeafFilter controllers via BLE (or demo-mode fallback).
-   * Updates scanState and re-renders when a device is found.
-   */
   async function startBleScan() {
     try {
       discoveredDevices = await ble.scanForControllers(8000);
       if (discoveredDevices.length > 0) {
-        pairedDevice = discoveredDevices[0]; // Take the first found device
-        // Auto-pair to get device info
+        pairedDevice = discoveredDevices[0];
         deviceInfo = await ble.pairController(pairedDevice.deviceId);
         scanState = 'found';
       } else {
@@ -317,52 +381,43 @@ export function renderOnboarding(container, state, navigate) {
       console.error('[Onboarding] BLE scan failed:', err);
       scanState = 'failed';
     }
-    // Only re-render if we're still on the scan step
     if (steps[step] === 'scan') {
       render();
     }
   }
 
   /**
-   * Animates the pairing step checklist with real-time progress.
-   * In demo mode the BLE module's built-in delays create a natural feel.
+   * Animates the pairing checklist. Called exactly once when entering the found step.
+   * Uses pairingStarted flag to prevent re-entry on every render() call.
    */
   async function startBlePairing() {
-    // Step 1: Controller detected (already done during scan)
     pairStepStates.detected = 'done';
     pairStepStates.bluetooth = 'active';
-    render();
+    if (steps[step] === 'found') render();
 
-    // Step 2: Bluetooth handshake (simulate brief delay for visual feedback)
     await delay(800);
     pairStepStates.bluetooth = 'done';
     pairStepStates.network = 'active';
     if (steps[step] === 'found') render();
 
-    // Steps 3 & 4 complete after Wi-Fi provisioning (Phase 2 next screen)
-    await delay(1000);
+    await delay(1200);
     pairStepStates.network = 'done';
     pairStepStates.leds = 'active';
     if (steps[step] === 'found') render();
 
-    await delay(600);
+    await delay(700);
     pairStepStates.leds = 'done';
+    pairingComplete = true;
     if (steps[step] === 'found') render();
   }
 
-  /**
-   * Sends Wi-Fi credentials to the controller via BLE provisioning.
-   * On success, saves the controller's IP and connects via HTTP.
-   */
   async function startWifiProvisioning(ssid, password) {
     if (!pairedDevice) {
-      // Fallback: skip to next step (manual mode)
       step++;
       render();
       return;
     }
 
-    // Show a connecting state (could enhance UI here)
     const btn = container.querySelector('#ob-wifi-connect');
     if (btn) {
       btn.textContent = 'Connecting...';
@@ -374,20 +429,21 @@ export function renderOnboarding(container, state, navigate) {
 
       if (result.success && result.ip) {
         provisionedIp = result.ip;
-        // Save the IP and establish HTTP connection
         setHubAddress(result.ip);
         const connResult = await connect(result.ip);
         console.log('[Onboarding] HTTP connection result:', connResult);
+        wifiError = null;
+        step++;
+        render();
       } else {
-        console.warn('[Onboarding] Wi-Fi provisioning failed:', result.error);
+        wifiError = result.error || 'Could not connect to Wi-Fi. Please check your password and try again.';
+        render();
       }
     } catch (err) {
       console.error('[Onboarding] Wi-Fi provisioning error:', err);
+      wifiError = 'Could not connect to Wi-Fi. Please check your password and try again.';
+      render();
     }
-
-    // Advance to zones step regardless (demo mode always succeeds)
-    step++;
-    render();
   }
 
   // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -398,4 +454,3 @@ export function renderOnboarding(container, state, navigate) {
 
   render();
 }
-
