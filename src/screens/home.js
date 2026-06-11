@@ -1,5 +1,6 @@
 import { hslToHex, hexToHsl, whiteTempToColor, showToast, syncFabColor, PATTERN_COLOR_LIGHTNESS } from '../utils.js';
 import { scenes } from '../data/scenes.js';
+import * as api from '../api.js';
 
 export function renderHome(container, state, navigate) {
   const recentColors = [
@@ -320,10 +321,13 @@ export function renderHome(container, state, navigate) {
       refreshDotDisplays();
     }
 
+    let brightDebounce = null;
     const onMove = e => setFromY(e.touches ? e.touches[0].clientY : e.clientY);
     const onUp = () => {
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
+      // Send final brightness to hardware
+      api.setBrightness(brightness);
     };
     thumb.addEventListener('mousedown', e => {
       e.preventDefault();
@@ -659,6 +663,8 @@ export function renderHome(container, state, navigate) {
       state.recentColors = [hex, ...state.recentColors.filter(c => c !== hex)].slice(0, 16);
       document.getElementById('nav-control')?.classList.remove('lights-off');
       syncFabColor(hex);
+      // Send pattern to WLED hardware
+      api.applyToHardware(state, patternColors);
       showToast('Pattern applied');
     });
 

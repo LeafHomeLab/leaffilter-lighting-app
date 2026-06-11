@@ -1,6 +1,7 @@
 import { scenes, patternCategories } from '../data/scenes.js';
 import { startRooflinePreview } from '../utils/rooflinePreview.js';
 import { showToast } from '../utils.js';
+import * as api from '../api.js';
 
 export function renderScenes(container, state, navigate) {
   let view = 'categories';
@@ -180,6 +181,14 @@ export function renderScenes(container, state, navigate) {
         if (scene) {
           state.activeScene = scene.name;
           state.lightsOn = true;
+          // Send scene to WLED hardware
+          api.applyScene({
+            colors: scene.colors,
+            movement: scene.animation,
+            speed: Math.round((scene.speed ?? 0) * 25.5),  // 0-10 → 0-255
+            brightness: state.brightness ?? 75,
+            zones: state.allZones.filter(z => z.active),
+          });
           showToast(`Applied: ${scene.name}`);
           setTimeout(() => navigate('home'), 300);
         }

@@ -44,14 +44,18 @@ const TIMEOUT_MS = 3000; // Prevent UI hangs when hub is offline
  * Reference: https://kno.wled.ge/features/effects/
  */
 export const WLED_EFFECT_MAP = {
-  Stationary: 0,   // Solid
-  Chase:      28,  // Chase
-  Twinkle:    17,  // Twinkle
-  Wave:       67,  // Colorwaves
-  Fade:       12,  // Fade
-  Meteor:     76,  // Meteor
-  Pulse:      100, // Heartbeat
-  Bounce:     91,  // Bouncing Balls
+  Stationary:  0,   // Solid
+  Static:      0,   // Solid (alias used by scene data)
+  Chase:       28,  // Chase
+  Twinkle:     17,  // Twinkle
+  Sparkle:     17,  // Twinkle (alias used by scene data)
+  Wave:        67,  // Colorwaves
+  Fade:        12,  // Fade
+  Meteor:      76,  // Meteor
+  Pulse:       100, // Heartbeat
+  Bounce:      91,  // Bouncing Balls
+  Gradient:    46,  // Palette (smooth multi-color gradient)
+  Alternating: 64,  // Two-color alternating segments
 };
 
 /**

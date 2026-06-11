@@ -1,5 +1,6 @@
 import { scenes } from '../data/scenes.js';
 import { hslToHex, hexToHsl, showToast, syncFabColor, PATTERN_COLOR_LIGHTNESS } from '../utils.js';
+import * as api from '../api.js';
 
 export function renderControl(container, state, navigate) {
   // Consume the base scene context once — presets are never modified
@@ -333,6 +334,7 @@ export function renderControl(container, state, navigate) {
   function attachEvents() {
     container.querySelector('#ctrl-power')?.addEventListener('click', () => {
       state.lightsOn = !state.lightsOn;
+      api.setLightsOn(state.lightsOn);
       render();
     });
 
@@ -369,12 +371,16 @@ export function renderControl(container, state, navigate) {
       });
     });
 
+    let brightTimer = null;
     container.querySelector('#ctrl-brightness')?.addEventListener('input', e => {
       brightness = parseInt(e.target.value);
       state.brightness = brightness;
       const v = container.querySelector('#brightness-val');
       if (v) v.textContent = brightness + '%';
       updateRangeTrack(e.target, brightness, 100);
+      // Debounce hardware call
+      clearTimeout(brightTimer);
+      brightTimer = setTimeout(() => api.setBrightness(brightness), 200);
     });
     updateRangeTrack(container.querySelector('#ctrl-brightness'), brightness, 100);
 
@@ -394,6 +400,8 @@ export function renderControl(container, state, navigate) {
       state.activeScene = 'Custom';
       document.getElementById('nav-control')?.classList.remove('lights-off');
       syncFabColor(hex);
+      // Send to WLED hardware
+      api.applyToHardware(state, [hex]);
       showToast('Lights updated');
       setTimeout(() => navigate('home'), 300);
     });
