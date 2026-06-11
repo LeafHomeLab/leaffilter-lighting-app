@@ -44,18 +44,18 @@ const TIMEOUT_MS = 3000; // Prevent UI hangs when hub is offline
  * Reference: https://kno.wled.ge/features/effects/
  */
 export const WLED_EFFECT_MAP = {
-  Stationary:  0,   // Solid
+  Stationary:  0,   // Solid — uses col[0]
   Static:      0,   // Solid (alias used by scene data)
-  Chase:       28,  // Chase
-  Twinkle:     17,  // Twinkle
-  Sparkle:     17,  // Twinkle (alias used by scene data)
-  Wave:        67,  // Colorwaves
-  Fade:        12,  // Fade
-  Meteor:      76,  // Meteor
-  Pulse:       100, // Heartbeat
-  Bounce:      91,  // Bouncing Balls
-  Gradient:    46,  // Palette (smooth multi-color gradient)
-  Alternating: 64,  // Two-color alternating segments
+  Chase:       28,  // Chase — uses col[0] vs col[1]
+  Twinkle:     80,  // Twinklefox — uses all 3 colors with palette
+  Sparkle:     20,  // Sparkle — sparkles col[0] on col[1] background
+  Wave:        6,   // Sweep — sweeps through col[0]/col[1]/col[2]
+  Fade:        56,  // Tri Fade — fades between all 3 colors
+  Meteor:      76,  // Meteor — uses col[0]
+  Pulse:       2,   // Breathe — pulses col[0]
+  Bounce:      48,  // Rolling Balls — uses col[0]
+  Gradient:    46,  // Gradient — smooth gradient across segment colors
+  Alternating: 84,  // Solid Pattern Tri — repeats col[0]/col[1]/col[2]
 };
 
 /**
@@ -302,6 +302,7 @@ export async function applyToHardware(state, patternColors = []) {
       fx: WLED_EFFECT_MAP[state.selectedMovement] ?? 0,
       sx: 128,
       ix: 128,
+      pal: 0,  // Force palette to use segment colors
     };
   });
 
@@ -369,7 +370,7 @@ export async function applyScene({ colors = [], movement = 'Stationary', speed =
   const bri = brightnessToWled(brightness);
 
   const segments = zones.map(z => ({
-    id: z.segId, col: rgbColors, fx, sx: speed, ix: 128, bri, on: true,
+    id: z.segId, col: rgbColors, fx, sx: speed, ix: 128, pal: 0, bri, on: true,
   }));
 
   return _post('/json/state', { seg: segments });
