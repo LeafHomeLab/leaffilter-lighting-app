@@ -42,21 +42,57 @@ const TIMEOUT_MS = 3000; // Prevent UI hangs when hub is offline
 /**
  * Maps app movement names → WLED effect fx IDs.
  * Reference: https://kno.wled.ge/features/effects/
+ *
+ * Verified against WLED 0.14.0 on the Dig-Quad by sampling /json/live with
+ * red/white/blue segment colors: effects below render the actual segment
+ * colors (pal:0 forces color-slot effects to use them; palette-only effects
+ * need pal 5 "Colors Only" / pal 4 "Color Gradient" — see WLED_PALETTE_MAP).
  */
 export const WLED_EFFECT_MAP = {
-  Stationary:  0,   // Solid — uses col[0]
+  Stationary:  0,   // Solid — uses col[0] (multi-color → 84, see effectForMovement)
   Static:      0,   // Solid (alias)
-  Chase:       28,  // Chase — confirmed 3-color ✓
-  Twinkle:     80,  // Twinklefox — palette-aware
-  Sparkle:     20,  // Sparkle — col[0] on col[1]
-  Wave:        54,  // Chase 3 — confirmed 3-color sweep ✓
-  Fade:        56,  // Tri Fade — confirmed 3-color fade ✓
-  Meteor:      76,  // Meteor — col[0] trail
-  Pulse:       2,   // Breathe — pulses col[0]
-  Bounce:      48,  // Rolling Balls — col[0]
-  Gradient:    46,  // Gradient — smooth blend
-  Alternating: 84,  // Solid Pattern Tri — confirmed 3-color static ✓
+  Chase:       28,  // Chase — col[0]+col[2] runners on col[1] bg ✓
+  Twinkle:     80,  // Twinklefox — palette-only; pal 5 renders segment colors ✓
+  Sparkle:     87,  // Glitter — 3-color base (pal 5) + white sparkles ✓
+  Wave:        54,  // Chase 3 — 3-color sweep ✓
+  Fade:        56,  // Tri Fade — 3-color fade ✓
+  Meteor:      76,  // Meteor — palette-only; pal 5 renders segment colors ✓
+  Pulse:       2,   // Breathe — blends col[0] ↔ col[1]
+  Bounce:      48,  // Rolling Balls — up to 3 ball colors on dark bg ✓
+  Gradient:    65,  // Palette — pal 4 = smooth moving gradient of segment colors ✓
+  Alternating: 84,  // Solid Pattern Tri — 3-color static ✓
 };
+
+/**
+ * Palette overrides for palette-driven effects. Everything else uses pal 0,
+ * which makes WLED's color-slot effects read the segment colors directly.
+ * pal 5 = "Colors Only" (distinct bands from col 1/2/3), pal 4 = "Color Gradient".
+ */
+export const WLED_PALETTE_MAP = {
+  Twinkle:  5,
+  Sparkle:  5,
+  Meteor:   5,
+  Gradient: 4,
+};
+
+/**
+ * Resolves a movement name + color count to the WLED { fx, pal } pair.
+ * Multi-color static patterns need Solid Pattern Tri (84) — plain Solid (0)
+ * only ever shows col[0]. Palette-driven effects with a single color use
+ * pal 2 ("Color 1") so the palette is built from that color alone.
+ *
+ * @param {string} movement   - App movement name, e.g. 'Chase'
+ * @param {number} colorCount - Number of colors being sent
+ * @returns {{ fx: number, pal: number }}
+ */
+export function effectForMovement(movement, colorCount = 1) {
+  if ((movement === 'Stationary' || movement === 'Static') && colorCount > 1) {
+    return { fx: 84, pal: 0 };
+  }
+  let pal = WLED_PALETTE_MAP[movement] ?? 0;
+  if (pal !== 0 && colorCount === 1) pal = 2;
+  return { fx: WLED_EFFECT_MAP[movement] ?? 0, pal };
+}
 
 /**
  * Maximum zones per controller. Each zone = one GPIO output = one wire run.
@@ -92,6 +128,20 @@ function hexToRgb(hex) {
     parseInt(hex.slice(2, 4), 16),
     parseInt(hex.slice(4, 6), 16),
   ];
+}
+
+/**
+ * Pads an RGB color list to exactly 3 entries so stale colors from a previous
+ * pattern never bleed into col[1]/col[2] on the controller. Two colors cycle
+ * (A,B,A) so tri-effects show no black band; one color gets black companions.
+ * @param {number[][]} rgbColors
+ * @returns {number[][]}
+ */
+function padToThreeColors(rgbColors) {
+  if (rgbColors.length === 0) return [[255, 255, 255], [0, 0, 0], [0, 0, 0]];
+  if (rgbColors.length === 1) return [rgbColors[0], [0, 0, 0], [0, 0, 0]];
+  if (rgbColors.length === 2) return [rgbColors[0], rgbColors[1], rgbColors[0]];
+  return rgbColors.slice(0, 3);
 }
 
 /**
@@ -180,6 +230,7 @@ export function isHubConfigured() {
 export async function connect(ipAddress) {
   console.log('[API] connect', { ip: ipAddress });
   setHubAddress(ipAddress);
+  HARDWARE_CONNECTED = false; // stale flag must not survive an IP change or failed reconnect
   try {
     const res = await fetchWithTimeout(`http://${HUB_IP}/json/info`);
     if (res.ok) {
@@ -268,15 +319,18 @@ export async function getHardwareInfo() {
  * @returns {Promise<void>}
  */
 export async function setPattern({ color, brightness, movement, zones = [] }) {
-  const rgb = hexToRgb(color);
-  const bri = brightnessToWled(brightness);
-  const fx  = WLED_EFFECT_MAP[movement] ?? 0;
+  const col = padToThreeColors([hexToRgb(color)]);
+  const { fx, pal } = effectForMovement(movement, 1);
 
   const segments = zones.map(z => ({
-    id: z.segId, col: [rgb], fx, sx: 128, ix: 128, bri, on: true,
+    id: z.segId, col, fx, sx: 128, ix: 128, pal, on: true,
   }));
 
-  return _post('/json/state', { seg: segments });
+  return _post('/json/state', {
+    on: true,
+    bri: brightnessToWled(brightness),
+    seg: segments,
+  });
 }
 
 /**
@@ -290,19 +344,20 @@ export async function setPattern({ color, brightness, movement, zones = [] }) {
 export async function applyToHardware(state, patternColors = []) {
   if (!isHubConfigured()) return null;
 
-  const activeZones = state.allZones.filter(z => z.active);
-  const segments = activeZones.map(zone => {
-    const colors = patternColors.length > 0
-      ? patternColors.map(hexToRgb)
-      : [[255, 255, 255]];
+  const colors = padToThreeColors(patternColors.map(hexToRgb));
+  const { fx, pal } = effectForMovement(state.selectedMovement, patternColors.length);
+
+  // Inactive zones get an explicit off — otherwise they keep playing the old pattern
+  const segments = state.allZones.map(zone => {
+    if (!zone.active) return { id: zone.segId, on: false };
     return {
       id: zone.segId,  // segId from zone object — not the loop index
       on: state.lightsOn !== false,
-      col: colors.slice(0, 3),
-      fx: WLED_EFFECT_MAP[state.selectedMovement] ?? 0,
+      col: colors,
+      fx,
       sx: 128,
       ix: 128,
-      pal: 0,  // Force palette to use segment colors
+      pal,
     };
   });
 
@@ -358,22 +413,27 @@ export async function setZoneActive(zone, active) {
 // ─── Scenes ───────────────────────────────────────────────────────────────────
 
 /**
- * Applies a scene across the given zones. WLED supports up to 3 palette colors
+ * Applies a scene across the given zones. WLED supports up to 3 colors
  * (primary/secondary/tertiary) per segment; additional colors are ignored.
+ * Zones flagged active:false are switched off so they don't keep playing the
+ * previous pattern; zones without an active flag are treated as active.
  *
- * @param {{ colors: string[], movement: string, speed?: number, brightness?: number, zones?: Array<{segId: number}> }} scene
+ * @param {{ colors: string[], movement: string, speed?: number, brightness?: number, zones?: Array<{segId: number, active?: boolean}> }} scene
  * @returns {Promise<void>}
  */
 export async function applyScene({ colors = [], movement = 'Stationary', speed = 128, brightness = 80, zones = [] }) {
-  const rgbColors = colors.slice(0, 3).map(hexToRgb);
-  const fx  = WLED_EFFECT_MAP[movement] ?? 0;
-  const bri = brightnessToWled(brightness);
+  const rgbColors = padToThreeColors(colors.map(hexToRgb));
+  const { fx, pal } = effectForMovement(movement, Math.min(colors.length, 3));
 
-  const segments = zones.map(z => ({
-    id: z.segId, col: rgbColors, fx, sx: speed, ix: 128, pal: 0, bri, on: true,
-  }));
+  const segments = zones.map(z => (z.active === false
+    ? { id: z.segId, on: false }
+    : { id: z.segId, col: rgbColors, fx, sx: speed, ix: 128, pal, on: true }));
 
-  return _post('/json/state', { seg: segments });
+  return _post('/json/state', {
+    on: true,                            // a scene apply implies lights on
+    bri: brightnessToWled(brightness),   // global brightness — segment bri would multiply against it
+    seg: segments,
+  });
 }
 
 // ─── Schedule ─────────────────────────────────────────────────────────────────

@@ -310,8 +310,8 @@ export function renderControl(container, state, navigate) {
     overlay.querySelector('#save-pattern-confirm').addEventListener('click', () => {
       const name = input.value.trim() || defaultName;
       const hexColors = baseScene
-        ? [hslToHex(selectedHue, selectedSat, PATTERN_COLOR_LIGHTNESS), ...baseScene.colors.slice(1)]
-        : [hslToHex(selectedHue, selectedSat, PATTERN_COLOR_LIGHTNESS)];
+        ? ['#' + hslToHex(selectedHue, selectedSat, PATTERN_COLOR_LIGHTNESS), ...baseScene.colors.slice(1)]
+        : ['#' + hslToHex(selectedHue, selectedSat, PATTERN_COLOR_LIGHTNESS)];
 
       const newScene = {
         id: Date.now(),
@@ -353,19 +353,18 @@ export function renderControl(container, state, navigate) {
 
     container.querySelector('[data-zone-action="all"]')?.addEventListener('click', () => {
       const allActive = state.activeZones.length === state.allZones.length;
-      state.allZones.forEach(z => z.active = !allActive);
-      state.activeZones = allActive ? [] : state.allZones.map(z => z.id);
+      state.allZones.forEach(z => {
+        z.active = !allActive;
+        api.setZoneActive(z, z.active);
+      });
       render();
     });
     container.querySelectorAll('[data-zone-id]').forEach(btn => {
       btn.addEventListener('click', () => {
-        const zid = btn.dataset.zoneId;
-        const zone = state.allZones.find(z => z.id === zid);
+        const zone = state.allZones.find(z => z.id === btn.dataset.zoneId);
         if (zone) {
           zone.active = !zone.active;
-          state.activeZones = zone.active
-            ? [...state.activeZones, zid]
-            : state.activeZones.filter(id => id !== zid);
+          api.setZoneActive(zone, zone.active);
           render();
         }
       });

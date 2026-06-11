@@ -310,6 +310,8 @@ export function renderHome(container, state, navigate) {
     updateBrightTrackColor();
     placeBrightThumb();
 
+    // Debounced hardware send covers every input path: mouse drag, touch drag, track click
+    let brightDebounce = null;
     function setFromY(clientY) {
       const rect = track.getBoundingClientRect();
       const thumbH = thumb.offsetHeight;
@@ -319,15 +321,14 @@ export function renderHome(container, state, navigate) {
       state.brightness = brightness;
       placeBrightThumb();
       refreshDotDisplays();
+      clearTimeout(brightDebounce);
+      brightDebounce = setTimeout(() => api.setBrightness(brightness), 200);
     }
 
-    let brightDebounce = null;
     const onMove = e => setFromY(e.touches ? e.touches[0].clientY : e.clientY);
     const onUp = () => {
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
-      // Send final brightness to hardware
-      api.setBrightness(brightness);
     };
     thumb.addEventListener('mousedown', e => {
       e.preventDefault();

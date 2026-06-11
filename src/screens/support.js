@@ -1,4 +1,4 @@
-import { connect, getHubAddress, HARDWARE_CONNECTED, getStatus } from '../api.js';
+import { connect, getHubAddress, HARDWARE_CONNECTED } from '../api.js';
 import { showToast } from '../utils.js';
 
 export function renderSupport(container, state) {
