@@ -81,6 +81,10 @@ export function createController(id, ip) {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
+ * Converts a hex color string to an [R, G, B] array.
+ * @param {string} hex - e.g. '#FF6347' or 'FF6347'
+ * @returns {number[]}
+ */
 function hexToRgb(hex) {
   hex = hex.replace('#', '');
   return [

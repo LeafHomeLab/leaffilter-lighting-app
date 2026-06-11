@@ -12,7 +12,7 @@ import { renderControl } from './screens/control.js';
 import { renderOnboarding } from './screens/onboarding.js';
 import { renderPatternEditor } from './screens/patternEditor.js';
 import { syncFabColor, showToast } from './utils.js';
-import { connect } from './api.js';
+import { connect, setLightsOn } from './api.js';
 
 
 // ===== STATE PERSISTENCE =====
@@ -259,6 +259,7 @@ function init() {
 
   document.querySelector('#nav-control')?.addEventListener('click', () => {
     state.lightsOn = !state.lightsOn;
+    setLightsOn(state.lightsOn);
     updateFabAppearance();
     showToast(state.lightsOn ? 'Lights on' : 'Lights off');
   });
