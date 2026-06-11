@@ -45,17 +45,17 @@ const TIMEOUT_MS = 3000; // Prevent UI hangs when hub is offline
  */
 export const WLED_EFFECT_MAP = {
   Stationary:  0,   // Solid — uses col[0]
-  Static:      0,   // Solid (alias used by scene data)
-  Chase:       28,  // Chase — uses col[0] vs col[1]
-  Twinkle:     80,  // Twinklefox — uses all 3 colors with palette
-  Sparkle:     20,  // Sparkle — sparkles col[0] on col[1] background
-  Wave:        6,   // Sweep — sweeps through col[0]/col[1]/col[2]
-  Fade:        56,  // Tri Fade — fades between all 3 colors
-  Meteor:      76,  // Meteor — uses col[0]
+  Static:      0,   // Solid (alias)
+  Chase:       28,  // Chase — confirmed 3-color ✓
+  Twinkle:     80,  // Twinklefox — palette-aware
+  Sparkle:     20,  // Sparkle — col[0] on col[1]
+  Wave:        54,  // Chase 3 — confirmed 3-color sweep ✓
+  Fade:        56,  // Tri Fade — confirmed 3-color fade ✓
+  Meteor:      76,  // Meteor — col[0] trail
   Pulse:       2,   // Breathe — pulses col[0]
-  Bounce:      48,  // Rolling Balls — uses col[0]
-  Gradient:    46,  // Gradient — smooth gradient across segment colors
-  Alternating: 84,  // Solid Pattern Tri — repeats col[0]/col[1]/col[2]
+  Bounce:      48,  // Rolling Balls — col[0]
+  Gradient:    46,  // Gradient — smooth blend
+  Alternating: 84,  // Solid Pattern Tri — confirmed 3-color static ✓
 };
 
 /**
