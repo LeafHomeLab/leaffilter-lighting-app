@@ -29,8 +29,10 @@ export function renderZones(container, state, _navigate) {
             </div>
             <p class="zones-empty-text">No zones configured</p>
           </div>
-        ` : state.controllers.map(ctrl => {
+        ` : state.controllers.map((ctrl, ctrlIdx) => {
           const ctrlLeds = ctrl.zones.reduce((s, z) => s + z.leds, 0);
+          // Only the primary controller can be hardware-backed (single-hub model)
+          const live = ctrlIdx === 0 && api.HARDWARE_CONNECTED;
           return `
             <div class="section-label" style="margin-top:var(--space-md);">${ctrl.name}</div>
             <div class="zones-card-list">
@@ -54,9 +56,9 @@ export function renderZones(container, state, _navigate) {
                   <div style="font-weight:var(--fw-semibold);">${ctrl.name}</div>
                   <div style="font-size:var(--fs-small); color:var(--text-secondary);">${ctrl.zones.length} zones &middot; ${ctrlLeds} LEDs</div>
                 </div>
-                <div class="chip chip-active">
-                  <span class="chip-dot online"></span>
-                  Online
+                <div class="chip ${live ? 'chip-active' : ''}">
+                  <span class="chip-dot ${live ? 'online' : ''}"></span>
+                  ${live ? 'Online' : 'Demo'}
                 </div>
               </div>
             </div>
@@ -120,9 +122,10 @@ export function renderZones(container, state, _navigate) {
         id: 'ctrl-back-patio',
         name: 'Back Patio',
         ip: '',
+        // hw:false — simulated zones; their segIds must never reach the real hub
         zones: [
-          { id: 'bp-roofline', name: 'Patio Roofline', shortName: 'Roofline', leds: 96, segId: 0, active: true,  color: null, brightness: null, scene: null },
-          { id: 'bp-posts',    name: 'Post Lights',    shortName: 'Posts',    leds: 24, segId: 1, active: false, color: null, brightness: null, scene: null },
+          { id: 'bp-roofline', name: 'Patio Roofline', shortName: 'Roofline', leds: 96, segId: 0, active: true,  color: null, brightness: null, scene: null, hw: false },
+          { id: 'bp-posts',    name: 'Post Lights',    shortName: 'Posts',    leds: 24, segId: 1, active: false, color: null, brightness: null, scene: null, hw: false },
         ],
       });
       render();

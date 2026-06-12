@@ -1,5 +1,5 @@
 import * as ble from '../ble.js';
-import { connect, setHubAddress } from '../api.js';
+import { connect, setHubAddress, reconcileZonesWithHardware } from '../api.js';
 
 export function renderOnboarding(container, state, navigate) {
   let step = 0;
@@ -432,6 +432,11 @@ export function renderOnboarding(container, state, navigate) {
         setHubAddress(result.ip);
         const connResult = await connect(result.ip);
         console.log('[Onboarding] HTTP connection result:', connResult);
+        if (connResult.connected) {
+          // Build the zone list from the outputs actually wired on this controller
+          const zoneCount = await reconcileZonesWithHardware(state);
+          console.log(`[Onboarding] Detected ${zoneCount ?? '?'} zone(s)`);
+        }
         wifiError = null;
         step++;
         render();

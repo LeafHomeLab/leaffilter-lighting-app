@@ -309,6 +309,130 @@ export async function getHardwareInfo() {
   return _get('/json/info');
 }
 
+// ─── Zone Detection & Provisioning ────────────────────────────────────────────
+//
+// A "zone" is one physical light string on one controller output (the Dig-Quad
+// has 4 outputs; most homes wire 1–2). WLED exposes the wired outputs in
+// /json/cfg → hw.led.ins, and zones map 1:1 onto WLED segments. The app owns
+// the segment layout: on connect it provisions one segment per output
+// (idempotent) so app zones and hardware always agree.
+
+/**
+ * Fetches the controller's hardware configuration (LED outputs, pins, etc.).
+ * @returns {Promise<object|null>}
+ */
+export async function getHardwareConfig() {
+  return _get('/json/cfg');
+}
+
+/**
+ * Detects the physical LED outputs wired on the controller.
+ * Primary source: /json/cfg hw.led.ins (one entry per configured output).
+ * Fallback: the board's existing segment list when cfg is unavailable.
+ *
+ * @returns {Promise<Array<{start: number, leds: number, pin: number|null}>|null>}
+ */
+async function detectOutputs() {
+  const cfg = await getHardwareConfig();
+  const ins = cfg?.hw?.led?.ins;
+  if (Array.isArray(ins) && ins.length > 0) {
+    const outputs = ins
+      .filter(b => (b.len ?? 0) > 0)
+      .map(b => ({ start: b.start ?? 0, leds: b.len, pin: Array.isArray(b.pin) ? b.pin[0] : null }))
+      .sort((a, b) => a.start - b.start);
+    if (outputs.length > 0) return outputs;
+  }
+  // Fallback: mirror the segments the installer configured on the board
+  const st = await _get('/json/state');
+  if (!Array.isArray(st?.seg)) return null;
+  const outputs = st.seg
+    .filter(s => (s.stop ?? 0) > (s.start ?? 0))
+    .map(s => ({ start: s.start, leds: s.stop - s.start, pin: null }))
+    .sort((a, b) => a.start - b.start);
+  return outputs.length > 0 ? outputs : null;
+}
+
+/**
+ * Ensures the board has exactly one segment per physical output (segment id =
+ * output index), deleting leftover segments beyond the output count. Idempotent:
+ * writes nothing when the layout already matches.
+ *
+ * @returns {Promise<Array<{segId: number, leds: number, pin: number|null}>|null>}
+ *   One descriptor per detected zone, or null when detection failed.
+ */
+export async function syncZonesWithHardware() {
+  if (!HARDWARE_CONNECTED) return null;
+  const outputs = await detectOutputs();
+  if (!outputs) return null;
+
+  const st = await _get('/json/state');
+  const existing = (st?.seg ?? []).filter(s => (s.stop ?? 0) > 0);
+  const aligned = existing.length === outputs.length && outputs.every((o, i) => {
+    const seg = existing.find(s => s.id === i);
+    return seg && seg.start === o.start && seg.stop === o.start + o.leds;
+  });
+
+  if (!aligned) {
+    const seg = outputs.map((o, i) => ({ id: i, start: o.start, stop: o.start + o.leds, grp: 1, spc: 0, on: true }));
+    for (const s of existing) {
+      if (s.id >= outputs.length) seg.push({ id: s.id, stop: 0 }); // stop:0 deletes the segment
+    }
+    await _post('/json/state', { seg });
+  }
+
+  return outputs.map((o, i) => ({ segId: i, leds: o.leds, pin: o.pin }));
+}
+
+/**
+ * Reconciles the app's zone list with the zones detected on the connected
+ * controller. Hardware is the source of truth for which zones exist and their
+ * LED counts; user-facing fields (name, active, color, scene) are preserved by
+ * segId. New outputs appear as "Zone N" until renamed.
+ *
+ * Single-hub model: HUB_IP belongs to controllers[0]. Multi-controller routing
+ * is a v2 concern — see FUTURE notes at the top of this file.
+ *
+ * @param {object} state - Global app state (controllers[0].zones is replaced)
+ * @returns {Promise<number|null>} Detected zone count, or null when offline/undetectable.
+ */
+let _reconcileInFlight = null;
+
+export async function reconcileZonesWithHardware(state) {
+  // Auto-connect and a manual Connect click can race — share one sync pass
+  if (_reconcileInFlight) return _reconcileInFlight;
+  _reconcileInFlight = _reconcileZones(state);
+  try {
+    return await _reconcileInFlight;
+  } finally {
+    _reconcileInFlight = null;
+  }
+}
+
+async function _reconcileZones(state) {
+  const detected = await syncZonesWithHardware();
+  if (!detected) return null;
+
+  const ctrl = state.controllers[0];
+  ctrl.zones = detected.map(d => {
+    const prev = ctrl.zones.find(z => z.segId === d.segId);
+    return {
+      id:         prev?.id ?? `zone-seg${d.segId}`,
+      name:       prev?.name ?? `Zone ${d.segId + 1}`,
+      shortName:  prev?.shortName ?? `Zone ${d.segId + 1}`,
+      leds:       d.leds,
+      segId:      d.segId,
+      active:     prev?.active ?? true,
+      color:      prev?.color ?? null,
+      brightness: prev?.brightness ?? null,
+      scene:      prev?.scene ?? null,
+      hw:         true,  // backed by a real output on the connected hub
+    };
+  });
+
+  window.dispatchEvent(new Event('lf:save-state'));
+  return detected.length;
+}
+
 // ─── Core Control ─────────────────────────────────────────────────────────────
 
 /**
@@ -347,8 +471,12 @@ export async function applyToHardware(state, patternColors = []) {
   const colors = padToThreeColors(patternColors.map(hexToRgb));
   const { fx, pal } = effectForMovement(state.selectedMovement, patternColors.length);
 
+  // Primary controller only — other controllers' zones reuse segIds and would
+  // collide on this hub. Per-controller routing is v2.
+  const hubZones = state.controllers[0]?.zones ?? [];
+
   // Inactive zones get an explicit off — otherwise they keep playing the old pattern
-  const segments = state.allZones.map(zone => {
+  const segments = hubZones.map(zone => {
     if (!zone.active) return { id: zone.segId, on: false };
     return {
       id: zone.segId,  // segId from zone object — not the loop index
@@ -407,6 +535,12 @@ export async function setZoneActive(zone, active) {
     console.warn('[API] setZoneActive: zone object with segId required');
     return;
   }
+  // Zones flagged hw:false belong to a controller that isn't the connected hub
+  // (e.g. the demo "Back Patio") — their segIds would collide with real segments.
+  if (zone.hw === false) {
+    console.log('[API] setZoneActive: skipping non-hardware zone', zone.id);
+    return;
+  }
   return _post('/json/state', { seg: [{ id: zone.segId, on: active }] });
 }
 
@@ -425,9 +559,11 @@ export async function applyScene({ colors = [], movement = 'Stationary', speed =
   const rgbColors = padToThreeColors(colors.map(hexToRgb));
   const { fx, pal } = effectForMovement(movement, Math.min(colors.length, 3));
 
-  const segments = zones.map(z => (z.active === false
-    ? { id: z.segId, on: false }
-    : { id: z.segId, col: rgbColors, fx, sx: speed, ix: 128, pal, on: true }));
+  const segments = zones
+    .filter(z => z.hw !== false)  // simulated zones must never reach the hub
+    .map(z => (z.active === false
+      ? { id: z.segId, on: false }
+      : { id: z.segId, col: rgbColors, fx, sx: speed, ix: 128, pal, on: true }));
 
   return _post('/json/state', {
     on: true,                            // a scene apply implies lights on

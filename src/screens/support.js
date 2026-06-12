@@ -1,4 +1,4 @@
-import { connect, getHubAddress, HARDWARE_CONNECTED } from '../api.js';
+import { connect, getHubAddress, HARDWARE_CONNECTED, reconcileZonesWithHardware } from '../api.js';
 import { showToast } from '../utils.js';
 
 export function renderSupport(container, state) {
@@ -259,7 +259,11 @@ export function renderSupport(container, state) {
             ledStatus.className = 'health-status good';
           }
 
-          showToast('Successfully paired with controller!');
+          // Detect wired outputs and rebuild the zone list from hardware truth
+          const zoneCount = await reconcileZonesWithHardware(state);
+          showToast(zoneCount != null
+            ? `Paired! ${zoneCount} zone${zoneCount === 1 ? '' : 's'} detected`
+            : 'Successfully paired with controller!');
         } else {
           statusEl.textContent = 'Offline';
           statusEl.style.background = 'rgba(231,76,60,0.15)';

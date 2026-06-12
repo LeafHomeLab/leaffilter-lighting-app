@@ -12,7 +12,7 @@ import { renderControl } from './screens/control.js';
 import { renderOnboarding } from './screens/onboarding.js';
 import { renderPatternEditor } from './screens/patternEditor.js';
 import { syncFabColor, showToast } from './utils.js';
-import { connect, setLightsOn } from './api.js';
+import { connect, setLightsOn, reconcileZonesWithHardware } from './api.js';
 
 
 // ===== STATE PERSISTENCE =====
@@ -35,12 +35,13 @@ function saveState(state) {
     for (const key of PERSIST_FIELDS) {
       snapshot[key] = state[key];
     }
-    // Save only the mutable per-zone fields; static fields (name, leds, segId) come from defaults
+    // Full zone structure is persisted: zones may come from hardware detection
+    // (reconcileZonesWithHardware), so they can't be rebuilt from code defaults
     snapshot.controllers = state.controllers.map(ctrl => ({
       id: ctrl.id,
-      zones: ctrl.zones.map(z => ({
-        id: z.id, active: z.active, color: z.color, brightness: z.brightness, scene: z.scene,
-      })),
+      name: ctrl.name,
+      ip: ctrl.ip,
+      zones: ctrl.zones.map(z => ({ ...z })),
     }));
     if (Array.isArray(snapshot.recentColors)) {
       snapshot.recentColors = snapshot.recentColors.slice(0, RECENT_COLORS_CAP);
@@ -89,26 +90,37 @@ function loadPersistedState(defaultControllers) {
       return {};
     }
     if (savedControllers) {
-      // Build a flat id→saved map, then re-hydrate against current defaults so
-      // new zones added in code automatically appear with their default values
-      const zoneOverrides = {};
-      for (const ctrl of savedControllers) {
-        for (const z of ctrl.zones) zoneOverrides[z.id] = z;
+      const isFullShape = savedControllers.every(c =>
+        Array.isArray(c.zones) && c.zones.every(z => z.segId != null && z.name));
+      if (isFullShape) {
+        // Snapshot carries the complete zone structure (post hardware-detection
+        // builds) — restore it verbatim; reconcile-on-connect re-syncs later
+        data.controllers = savedControllers.map(ctrl => ({
+          ...ctrl,
+          zones: ctrl.zones.map(z => ({ ...z })),
+        }));
+      } else {
+        // Legacy snapshot: only mutable per-zone fields were saved — re-hydrate
+        // against current code defaults
+        const zoneOverrides = {};
+        for (const ctrl of savedControllers) {
+          for (const z of ctrl.zones) zoneOverrides[z.id] = z;
+        }
+        data.controllers = defaultControllers.map(ctrl => ({
+          ...ctrl,
+          zones: ctrl.zones.map(z => {
+            const saved = zoneOverrides[z.id];
+            if (!saved) return { ...z };
+            return {
+              ...z,
+              active:     saved.active,
+              color:      saved.color      ?? null,
+              brightness: saved.brightness ?? null,
+              scene:      saved.scene      ?? null,
+            };
+          }),
+        }));
       }
-      data.controllers = defaultControllers.map(ctrl => ({
-        ...ctrl,
-        zones: ctrl.zones.map(z => {
-          const saved = zoneOverrides[z.id];
-          if (!saved) return { ...z };
-          return {
-            ...z,
-            active:     saved.active,
-            color:      saved.color      ?? null,
-            brightness: saved.brightness ?? null,
-            scene:      saved.scene      ?? null,
-          };
-        }),
-      }));
     }
     return data;
   } catch (err) {
@@ -118,6 +130,9 @@ function loadPersistedState(defaultControllers) {
 }
 
 // ===== APP STATE =====
+// Demo-mode seed data ONLY. Once a controller is connected,
+// reconcileZonesWithHardware replaces the zone list with what's actually wired
+// (one zone per physical output) — these names/counts never reach a real install.
 const DEFAULT_CONTROLLERS = [
   {
     id: 'ctrl-main',
@@ -269,10 +284,19 @@ function init() {
 
   const savedIp = localStorage.getItem('leaflight_hub_ip');
   if (savedIp) {
-    connect(savedIp).then(res => {
+    connect(savedIp).then(async res => {
       if (res.connected) {
         console.log(`[Main] Auto-connected to WLED controller at ${savedIp}`);
         showToast('Connected to lighting controller');
+        // Hardware defines which zones exist — refresh the visible screen if it changed them
+        const zoneCount = await reconcileZonesWithHardware(state);
+        if (zoneCount != null) {
+          console.log(`[Main] Detected ${zoneCount} zone(s) on controller`);
+          // Don't stomp screens with in-progress local state (wizard steps, edits)
+          if (state.currentScreen !== 'onboarding' && state.currentScreen !== 'patternEditor') {
+            navigate(state.currentScreen);
+          }
+        }
       } else {
         console.warn(`[Main] Auto-connect failed for ${savedIp}`);
       }

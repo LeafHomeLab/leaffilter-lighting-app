@@ -187,7 +187,7 @@ export function renderScenes(container, state, navigate) {
             movement: scene.animation,
             speed: Math.round((scene.speed ?? 0) * 25.5),  // 0-10 → 0-255
             brightness: state.brightness ?? 75,
-            zones: state.allZones,  // full list — applyScene switches inactive zones off
+            zones: state.controllers[0]?.zones ?? [],  // primary hub only — applyScene switches inactive zones off
           });
           showToast(`Applied: ${scene.name}`);
           setTimeout(() => navigate('home'), 300);
