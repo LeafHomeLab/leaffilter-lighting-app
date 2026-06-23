@@ -153,6 +153,27 @@ export function brightnessToWled(pct) {
   return Math.round(Math.max(0, Math.min(100, pct)) * 2.55);
 }
 
+/**
+ * Returns true when the app is loaded from a non-localhost origin (e.g. phone
+ * accessing via a tunnel). In that case WLED requests are routed through
+ * Vite's /wled-proxy to avoid firewall blocks and HTTPS → HTTP mixed-content.
+ * On localhost (laptop) this returns false — direct connections are used.
+ */
+function useProxy() {
+  const h = window.location.hostname;
+  return h !== 'localhost' && h !== '127.0.0.1';
+}
+
+/**
+ * Builds the full URL for a WLED API path.
+ * - Localhost (laptop): http://<HUB_IP><path>  (direct, unchanged)
+ * - Remote (phone):     /wled-proxy<path>       (proxied through Vite)
+ */
+function wledUrl(path) {
+  if (useProxy()) return `/wled-proxy${path}`;
+  return `http://${HUB_IP}${path}`;
+}
+
 /** Fetch with a hard timeout — prevents the UI from hanging when hub is offline. */
 async function fetchWithTimeout(url, options = {}, ms = TIMEOUT_MS) {
   const controller = new AbortController();
@@ -171,7 +192,7 @@ async function _post(path, payload) {
   console.log(`[API] POST ${path}`, payload);
   if (!HARDWARE_CONNECTED) return null;
   try {
-    const res = await fetchWithTimeout(`http://${HUB_IP}${path}`, {
+    const res = await fetchWithTimeout(wledUrl(path), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -188,7 +209,7 @@ async function _get(path) {
   console.log(`[API] GET ${path}`);
   if (!HARDWARE_CONNECTED) return null;
   try {
-    const res = await fetchWithTimeout(`http://${HUB_IP}${path}`);
+    const res = await fetchWithTimeout(wledUrl(path));
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.json();
   } catch (err) {
@@ -232,7 +253,7 @@ export async function connect(ipAddress) {
   setHubAddress(ipAddress);
   HARDWARE_CONNECTED = false; // stale flag must not survive an IP change or failed reconnect
   try {
-    const res = await fetchWithTimeout(`http://${HUB_IP}/json/info`);
+    const res = await fetchWithTimeout(wledUrl('/json/info'));
     if (res.ok) {
       const info = await res.json();
       HARDWARE_CONNECTED = true;
