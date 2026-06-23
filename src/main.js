@@ -279,8 +279,7 @@ function init() {
     showToast(state.lightsOn ? 'Lights on' : 'Lights off');
   });
 
-  const onboarded = localStorage.getItem('lf_onboarded');
-  navigate(onboarded ? 'home' : 'onboarding');
+  navigate('onboarding');
 
   const savedIp = localStorage.getItem('leaflight_hub_ip');
   if (savedIp) {
