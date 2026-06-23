@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   server: {
+    host: true,
     watch: {
       // Exclude Capacitor native platform directories from Vite's file watcher.
       // These contain thousands of generated files that chokidar tries to watch,
