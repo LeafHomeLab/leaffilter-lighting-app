@@ -29,6 +29,13 @@
 //  • Max 4 zones per controller. Most homes use 1–2.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import {
+  isCloudConfigured,
+  cloudUpdateDeviceState,
+  cloudGetDeviceState,
+  cloudSyncSchedules,
+} from './cloud.js';
+
 // ─── Configuration ────────────────────────────────────────────────────────────
 
 /** True once connect() succeeds. Guards live hardware calls. */
@@ -188,9 +195,29 @@ async function fetchWithTimeout(url, options = {}, ms = TIMEOUT_MS) {
   }
 }
 
+// ─── Cloud fallback transport ─────────────────────────────────────────────────
+// Only /json/state is meaningful remotely: its payload maps 1:1 onto the
+// device shadow's desired/reported state (docs/backend-architecture.md §3.2).
+// Config endpoints (/json/cfg, /json/info) stay LAN-only — the cloud registry
+// carries that data instead. Gated: cloud.js resolves null until the
+// lf_cloud_enabled flag + API base are configured, so default behavior is
+// byte-identical to before.
+
+async function cloudFallbackPost(path, payload) {
+  if (path !== '/json/state' || !isCloudConfigured()) return null;
+  console.log(`[API] POST ${path} → cloud shadow fallback`);
+  return cloudUpdateDeviceState(payload);
+}
+
+async function cloudFallbackGet(path) {
+  if (path !== '/json/state' || !isCloudConfigured()) return null;
+  console.log(`[API] GET ${path} → cloud shadow fallback`);
+  return cloudGetDeviceState();
+}
+
 async function _post(path, payload) {
   console.log(`[API] POST ${path}`, payload);
-  if (!HARDWARE_CONNECTED) return null;
+  if (!HARDWARE_CONNECTED) return cloudFallbackPost(path, payload);
   try {
     const res = await fetchWithTimeout(wledUrl(path), {
       method: 'POST',
@@ -201,20 +228,20 @@ async function _post(path, payload) {
     return res.json();
   } catch (err) {
     console.warn(`[API] POST ${path} failed:`, err.message);
-    return null;
+    return cloudFallbackPost(path, payload);
   }
 }
 
 async function _get(path) {
   console.log(`[API] GET ${path}`);
-  if (!HARDWARE_CONNECTED) return null;
+  if (!HARDWARE_CONNECTED) return cloudFallbackGet(path);
   try {
     const res = await fetchWithTimeout(wledUrl(path));
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return res.json();
   } catch (err) {
     console.warn(`[API] GET ${path} failed:`, err.message);
-    return null;
+    return cloudFallbackGet(path);
   }
 }
 
@@ -596,16 +623,20 @@ export async function applyScene({ colors = [], movement = 'Stationary', speed =
 // ─── Schedule ─────────────────────────────────────────────────────────────────
 
 /**
- * Syncs schedule data to a cloud relay or companion microcontroller.
- * WLED has no native time-based scheduling; this is a stub for a future endpoint.
+ * Syncs the schedule list to the cloud, which executes it (EventBridge —
+ * docs/backend-architecture.md §3.5). Until the cloud flag + backend exist,
+ * this remains a logged no-op exactly like the original stub.
  *
- * @param {Array<{ id: number, time: string, action: string, active: boolean }>} schedules
- * @returns {Promise<void>}
+ * @param {Array<object>} schedules - state.schedules entries
+ * @returns {Promise<object|null>}
  */
 export async function syncSchedules(schedules) {
-  // Stub: no-op — cloud relay endpoint not yet defined.
-  console.log('[API] syncSchedules (stub)', { count: schedules.length, schedules });
-  return Promise.resolve();
+  if (isCloudConfigured()) {
+    console.log('[API] syncSchedules → cloud', { count: schedules.length });
+    return cloudSyncSchedules(schedules);
+  }
+  console.log('[API] syncSchedules (stub — cloud not configured)', { count: schedules.length });
+  return null;
 }
 
 // ─── Wiring Guide ─────────────────────────────────────────────────────────────

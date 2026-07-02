@@ -1,0 +1,19 @@
+{
+  "name": "lighting-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LeafFilter Lighting cloud backend (Phase 1 scaffold) — see docs/backend-architecture.md",
+  "scripts": {
+    "synth": "cdk synth",
+    "diff": "cdk diff",
+    "deploy": "cdk deploy --require-approval broadening",
+    "destroy": "cdk destroy"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.160.0",
+    "constructs": "^10.3.0"
+  },
+  "devDependencies": {
+    "aws-cdk": "^2.160.0"
+  }
+}

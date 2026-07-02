@@ -3,6 +3,9 @@ node_modules/
 dist/
 dist-ssr/
 
+# CDK synth output (backend/)
+cdk.out/
+
 # Logs
 logs/
 *.log
